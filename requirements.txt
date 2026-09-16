@@ -1,0 +1,6 @@
+pydantic>=2.7,<3
+sentence-transformers>=2.7,<4
+torch>=2.1            # required by sentence-transformers; pinned for CUDA compatibility
+numpy>=1.26,<3
+scikit-learn>=1.4     # eval metrics only (precision/recall, confusion matrix)
+pytest>=8.0

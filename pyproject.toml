@@ -1,0 +1,14 @@
+[project]
+name = "rouge"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=1.26,<3",
+    "pydantic>=2.7,<3",
+    "pytest>=8.0",
+    "scikit-learn>=1.4",
+    "sentence-transformers>=2.7,<4",
+    "torch>=2.1",
+]

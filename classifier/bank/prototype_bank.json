@@ -1,0 +1,38 @@
+{
+    "summarization": [
+      "summarize this article in five bullet points",
+      "give me a short summary of the following text",
+      "condense this paragraph into two sentences",
+      "write a TL;DR of this report",
+      "recap the key points of this meeting note",
+      "provide a brief overview of the document below",
+      "abridge the following chapter",
+      "compress this email thread into a summary",
+      "give me the gist of this transcript",
+      "summarize the main findings of this paper"
+    ],
+    "extraction": [
+      "extract all the dates mentioned in this text",
+      "list every person named in the passage",
+      "pull out the prices from this invoice",
+      "find all email addresses in the message",
+      "identify the action items in these notes",
+      "what are the key entities in this paragraph",
+      "pick out the product names from the review",
+      "get the phone numbers from this contact sheet",
+      "extract the totals from this receipt",
+      "which companies are mentioned in the article"
+    ],
+    "code_generation": [
+      "write a python function that sorts a list of dicts by key",
+      "fix this bug in my javascript code",
+      "refactor this loop to use a generator",
+      "implement a binary search in rust",
+      "write a regex that validates iso dates",
+      "convert this function to async await style",
+      "add error handling to this script",
+      "write a unit test for this method",
+      "debug why this sql query returns duplicates",
+      "create a bash script that backs up a folder"
+    ]
+  }
