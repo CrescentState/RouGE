@@ -4,3 +4,31 @@ torch>=2.1            # required by sentence-transformers; pinned for CUDA compa
 numpy>=1.26,<3
 scikit-learn>=1.4     # eval metrics only (precision/recall, confusion matrix)
 pytest>=8.0
+
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+
+# ---------------------------------------------------------
+# Setup Module (Person B: Infrastructure & API)
+# ---------------------------------------------------------
+llama-cpp-python
+fastapi
+uvicorn
+pynvml
+huggingface_hub
+
+# ---------------------------------------------------------
+# DAG Module (Person C: Decomposition & Gating)
+# ---------------------------------------------------------
+pydantic
+networkx
+requests
+
+# ---------------------------------------------------------
+# Evaluation UI
+# ---------------------------------------------------------
+streamlit
+
+# ---------------------------------------------------------
+# Testing Utilities
+# ---------------------------------------------------------
+pytest
