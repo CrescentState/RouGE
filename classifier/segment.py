@@ -21,12 +21,19 @@ def segment(prompt: str) -> list[str]:
     if not prompt.strip():
         return []
     # mask protected regions so connectors inside them are invisible
-    masked = prompt
+    # rebuild the string by inserting tokens at match spans (avoids
+    # masked.replace() corrupting duplicate quoted strings).
+    masked_parts: list[str] = []
     keep: dict[str, str] = {}
+    prev_end = 0
     for i, m in enumerate(_PROTECTED.finditer(prompt)):
         tok = f"\x00{i}\x00"
         keep[tok] = m.group(0)
-        masked = masked.replace(m.group(0), tok)
+        masked_parts.append(prompt[prev_end:m.start()])
+        masked_parts.append(tok)
+        prev_end = m.end()
+    masked_parts.append(prompt[prev_end:])
+    masked = "".join(masked_parts)
 
     pieces: list[str] = []
     for sent in _SENT_SPLIT.split(masked):
@@ -36,6 +43,6 @@ def segment(prompt: str) -> list[str]:
     out = []
     for p in pieces:
         for tok, orig in keep.items():
-            p = p.replace(tok, orig)
+            p = p.replace(tok, orig, 1)  # replace at most once per token
         out.append(p)
     return out

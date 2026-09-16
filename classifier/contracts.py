@@ -31,9 +31,11 @@ class ClassificationResult(BaseModel):
 CONF_FLOOR = 0.45    # below this, clause task_type becomes "unknown"
 MARGIN     = 0.08    # below best-second gap, same -> "unknown"
 
-# Lexical hash-fallback embedder produces much lower raw similarities
-# (pure token overlap, no semantics). Loosen thresholds so the
-# conservative path isn't triggered for every clause on CPU-only boxes.
-if __import__("classifier.embedder", fromlist=["BACKEND"]).BACKEND != "minilm":
-    CONF_FLOOR = 0.20
-    MARGIN = 0.01
+# Fallback thresholds for hash-fallback embedder (lower raw similarities
+# from pure token-overlap embedder so conservative path isn't triggered
+# on CPU-only boxes; overridden at classify-time via get_backend()).
+FALLBACK_CONF_FLOOR = 0.20
+FALLBACK_MARGIN = 0.01
+
+# Empty prompt contract: zero clauses → simple label (valid per
+# contract spec "exactly one object per prompt"; documented behaviour).
