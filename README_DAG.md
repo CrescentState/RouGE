@@ -1,7 +1,7 @@
-# MemGate DAG Module: VRAM-Gated Decomposition (Contract 2 & Phase 3)
+# RouGE DAG Module: VRAM-Gated Decomposition (Contract 2 & Phase 3)
 
 ## Overview
-This module represents the cognitive routing core of the MemGate architecture (Phase 3). It receives complex, mixed-intent user prompts and dynamically breaks them down into atomic sub-tasks (Directed Acyclic Graphs). 
+This module represents the cognitive routing core of the RouGE architecture (Phase 3). It receives complex, mixed-intent user prompts and dynamically breaks them down into atomic sub-tasks (Directed Acyclic Graphs). 
 
 Instead of relying on static rules, the decomposition engine actively queries the edge hardware (`Setup` API) for live VRAM availability. If memory is sufficient, it uses the INT4 model to recursively split the tasks. If the INT4 model hallucinates an invalid graph structure, the system triggers the **Phase 2.5 Safety Fallback**, seamlessly routing that specific sub-task to the higher-precision INT8 model.
 
@@ -22,11 +22,11 @@ This folder contains the core logic for structural validation and recursive rout
 
 All dependencies for this module are unified in the main project repository. 
 
-To install the required packages (including `pydantic`, `networkx`, `requests`, and `streamlit`), run the master requirements file located in the parent directory:
+To install the required packages (including `pydantic`, `networkx`, `requests`, and `streamlit`), use `uv` with the project lockfile:
 
 ```bash
-# Run this from the root of the MemGate project
-python -m pip install -r requirements.txt
+# Run this from the root of the RouGE project
+uv sync
 ## Running the Evaluation UI
 
 To visualize the **DAG generation**, evaluate the **VRAM-gating logic**, and observe the final execution of the leaf nodes, use the Streamlit evaluation dashboard.
@@ -35,10 +35,10 @@ To visualize the **DAG generation**, evaluate the **VRAM-gating logic**, and obs
 
 ### Option 1: Automated Launch (Recommended)
 
-From the root of the `Memgate` project, run the batch script:
+From the root of the `RouGE` project, run the batch script:
 
 ```powershell
-.\start_memgate.bat
+.\start_rouge.bat
 ```
 
 This script will automatically:

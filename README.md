@@ -58,8 +58,8 @@ configs/       engine ports, quant levels, thresholds, presets
 llama-server -m model-Q4_K_M.gguf --port 8081 -ngl 99 &
 llama-server -m model-Q8_0.gguf   --port 8082 -ngl 99 &
 
-# 2. Install middleware dependencies
-pip install -r requirements.txt
+# 2. Install middleware dependencies (uv: pyproject.toml + uv.lock)
+uv sync
 
 # 3. Configure engines + thresholds
 cp configs/default.yaml configs/local.yaml

@@ -44,7 +44,7 @@
 #     yield
 #     task.cancel()
 
-# app = FastAPI(title="MemGate Contract 3 API", lifespan=lifespan)
+# app = FastAPI(title="RouGE Contract 3 API", lifespan=lifespan)
 
 # # Load engines
 # print("Loading INT4 Engine...")
@@ -150,7 +150,7 @@ async def lifespan(app: FastAPI):
     yield
     task.cancel()
 
-app = FastAPI(title="MemGate Contract 3 API", lifespan=lifespan)
+app = FastAPI(title="RouGE Contract 3 API", lifespan=lifespan)
 
 # 5. Load Heterogeneous Engines Concurrently
 print("Loading INT4 Engine...")

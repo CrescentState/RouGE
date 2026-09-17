@@ -8,7 +8,7 @@ sys.path.append(dag_path)
 from dag_models import DagNode
 from decompose import decompose, get_free_vram_mb, call_int8_engine
 
-st.set_page_config(page_title="MemGate Unified Pipeline", layout="wide")
+st.set_page_config(page_title="RouGE Unified Pipeline", layout="wide")
 
 # ==========================================
 # PHASE 1: CLASSIFICATION (Placeholder)
@@ -67,7 +67,7 @@ def extract_executable_tasks(node, task_list=None):
 # ==========================================
 # UI LAYOUT & EXECUTION
 # ==========================================
-st.title("MemGate Architecture: End-to-End Pipeline")
+st.title("RouGE Architecture: End-to-End Pipeline")
 st.markdown(f"**Hardware Status:** RTX 5050 | **Free VRAM:** `{get_free_vram_mb():.0f} MB`")
 st.markdown("---")
 

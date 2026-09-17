@@ -1,34 +1,19 @@
+fastapi
+uvicorn
+llama-cpp-python>=0.3.20,<0.4
+nvidia-ml-py
+huggingface_hub
+requests
+networkx
 pydantic>=2.7,<3
+streamlit
 sentence-transformers>=2.7,<4
-torch>=2.1            # required by sentence-transformers; pinned for CUDA compatibility
-numpy>=1.26,<3
-scikit-learn>=1.4     # eval metrics only (precision/recall, confusion matrix)
-pytest>=8.0
+torch>=2.1
 
 --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
 
 # ---------------------------------------------------------
-# Setup Module (Person B: Infrastructure & API)
+# Development / Evaluation
 # ---------------------------------------------------------
-llama-cpp-python
-fastapi
-uvicorn
-pynvml
-huggingface_hub
-
-# ---------------------------------------------------------
-# DAG Module (Person C: Decomposition & Gating)
-# ---------------------------------------------------------
-pydantic
-networkx
-requests
-
-# ---------------------------------------------------------
-# Evaluation UI
-# ---------------------------------------------------------
-streamlit
-
-# ---------------------------------------------------------
-# Testing Utilities
-# ---------------------------------------------------------
-pytest
+pytest>=8.0
+scikit-learn>=1.4

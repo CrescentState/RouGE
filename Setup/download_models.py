@@ -5,7 +5,7 @@ from huggingface_hub import hf_hub_download
 repo_id = "Qwen/Qwen2.5-1.5B-Instruct-GGUF"
 model_dir = "./models"
 
-# Satisfying the MemGate requirement for differentially quantized local engines
+# Satisfying the RouGE requirement for differentially quantized local engines
 files_to_download = {
     "INT4": "qwen2.5-1.5b-instruct-q4_k_m.gguf", 
     "INT8": "qwen2.5-1.5b-instruct-q8_0.gguf"   

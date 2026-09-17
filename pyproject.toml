@@ -1,14 +1,33 @@
 [project]
 name = "rouge"
 version = "0.1.0"
-description = "Add your description here"
+description = "Route-Gated Execution: recursive VRAM-gated routing middleware for heterogeneous quantized LLM inference on edge hardware."
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "numpy>=1.26,<3",
+    "fastapi",
+    "uvicorn",
+    "llama-cpp-python>=0.3.20,<0.4",
+    "nvidia-ml-py",
+    "huggingface_hub",
+    "requests",
+    "networkx",
     "pydantic>=2.7,<3",
-    "pytest>=8.0",
-    "scikit-learn>=1.4",
+    "streamlit",
     "sentence-transformers>=2.7,<4",
     "torch>=2.1",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "scikit-learn>=1.4",
+]
+
+[[tool.uv.index]]
+name = "llama-cpp-cu124"
+url = "https://abetlen.github.io/llama-cpp-python/whl/cu124"
+explicit = true
+
+[tool.uv.sources]
+llama-cpp-python = { index = "llama-cpp-cu124" }

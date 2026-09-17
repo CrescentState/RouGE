@@ -1,16 +1,16 @@
-# MemGate Setup Module: Hardware Infrastructure & API (Contract 3)
+# RouGE Setup Module: Hardware Infrastructure & API (Contract 3)
 
 ## Overview
-This module acts as the physical hardware backend for the MemGate architecture. It handles the local hosting of heterogeneous quantized LLMs (INT4 and INT8) and exposes them to the rest of the team via a FastAPI REST interface (Contract 3). 
+This module acts as the physical hardware backend for the RouGE architecture. It handles the local hosting of heterogeneous quantized LLMs (INT4 and INT8) and exposes them to the rest of the team via a FastAPI REST interface (Contract 3). 
 
-Crucially, it also integrates `pynvml` to actively monitor and log the host machine's thermal output, power draw, and VRAM utilization to strictly enforce the edge hardware constraints.
+Crucially, it also integrates NVIDIA's `nvidia-ml-py` (imported as `pynvml`) to actively monitor and log the host machine's thermal output, power draw, and VRAM utilization to strictly enforce the edge hardware constraints.
 
 ---
 
 ## Hardware & System Requirements
 *   **Target Hardware:** NVIDIA RTX 5050 Laptop GPU (**8GB VRAM**)
-*   **Python Version:** Python 3.12
-*   **Drivers:** [NVIDIA CUDA Toolkit 12.4](https://developer.nvidia.com/cuda-12-4-0-download-archive) & Microsoft Visual C++ Redistributable
+*   **Python Version:** Python 3.13
+*   **Drivers:** [NVIDIA CUDA Toolkit 12.4](https://developer.nvidia.com/cuda-12-4-0-download-archive) & Microsoft Visual C++ Redistributable (the CUDA `bin` dir must be on `PATH` so `llama_cpp` can load its CUDA DLLs)
 *   **Models:** Qwen 2.5 1.5B Instruct (GGUF format: INT4 & INT8)
 
 ---
@@ -18,9 +18,10 @@ Crucially, it also integrates `pynvml` to actively monitor and log the host mach
 ## Installation & Setup
 
 ### 1. Install Dependencies
-Ensure you are in the `Setup` directory, then install the required packages using the provided requirements file:
+From the root of the project, install all required packages into the virtual environment:
 ```bash
-python -m pip install -r requirements.txt
+uv sync
+```
 ### 2. Download the Models
 
 Before starting the server, you must download the local model files.
