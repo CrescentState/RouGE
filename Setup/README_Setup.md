@@ -24,20 +24,24 @@ uv sync
 ```
 ### 2. Download the Models
 
-Before starting the server, you must download the local model files.
-
-Run the automated script to download the required **INT4** and **INT8 GGUF model weights** from Hugging Face. The models will automatically be saved in the local `/models` directory.
+Before starting the server, download the local model files. Run the script **from the `Setup` directory** — both `download_models.py` and `api.py` use file paths relative to `Setup/`:
 
 ```bash
-python download_models.py
+cd Setup
+..\.venv\Scripts\python.exe download_models.py
 ```
+
+This downloads the **INT4** and **INT8 GGUF model weights** of Qwen 2.5 1.5B Instruct (~3 GB total) from Hugging Face into `Setup/models/`.
 
 ## Running the Server
 
-Start the FastAPI application using **Uvicorn**. This loads both models into VRAM and starts the background telemetry logger.
+Start the FastAPI application using **Uvicorn** from inside `Setup/`. On boot it loads **both models into VRAM** and starts the background telemetry logger.
+
+> **Prerequisite:** the server will not start without an accessible NVIDIA GPU — CUDA 12.4 runtime on `PATH` (for `llama_cpp` DLLs) and an NVIDIA driver (for `nvidia-ml-py`) — and both `.gguf` files present under `Setup/models/`.
 
 ```bash
-python -m uvicorn api:app --host 0.0.0.0 --port 8000
+cd Setup
+..\.venv\Scripts\python.exe -m uvicorn api:app --host 0.0.0.0 --port 8000
 ```
 
 Once the server is running, the API interactive documentation (**Swagger UI**) is available at:
@@ -89,7 +93,7 @@ Routes sub-tasks to the requested model precision and returns the generated outp
 
 ## Automated Evaluation Logging
 
-To satisfy the **Phase 4** and **Phase 8** evaluation requirements, the server automatically generates two continuous log files in the root directory.
+To satisfy the **Phase 4** and **Phase 8** evaluation requirements, the server automatically generates two continuous log files in its working directory (`Setup/` when started as above).
 
 ### `telemetry_log.csv`
 

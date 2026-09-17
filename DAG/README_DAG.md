@@ -27,6 +27,10 @@ To install the required packages (including `pydantic`, `networkx`, `requests`, 
 ```bash
 # Run this from the root of the RouGE project
 uv sync
+```
+
+---
+
 ## Running the Evaluation UI
 
 To visualize the **DAG generation**, evaluate the **VRAM-gating logic**, and observe the final execution of the leaf nodes, use the Streamlit evaluation dashboard.
@@ -44,7 +48,7 @@ From the root of the `RouGE` project, run the batch script:
 This script will automatically:
 
 1. Start the FastAPI hardware server in the background.
-2. Wait for the models to load.
+2. Wait a fixed 10-second delay for the models to load into VRAM.
 3. Launch the DAG visualization UI.
 
 ### Option 2: Manual UI Launch
@@ -103,9 +107,17 @@ Complex Prompt
       │
       ├── Valid ───────────────► Continue DAG Execution
       │
-      └── Failure
-           │
-           ├── Invalid Graph
-           ├── VRAM < 512 MB
-           └── Timeout
+└── Failure
+        │
+        ├── Invalid Graph
+        ├── VRAM < 512 MB
+        └── Timeout
 ```
+
+---
+
+## Known Limitations
+
+*   The response produced by the INT8 fallback inside `decompose()` is currently discarded — the UI re-executes fallback nodes itself rather than reusing that text.
+*   Decomposition is triggered by a coarse token threshold (`> 30` tokens) in addition to intent type; this is not yet aligned with the classifier's 4000-token escalation threshold.
+*   `decompose.py` optimistically assumes 2048 MB of free VRAM if the `Setup` telemetry endpoint is unreachable.
