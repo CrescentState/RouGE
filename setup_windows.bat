@@ -11,21 +11,29 @@ echo ===================================================
 set "ROUGE_BOOTSTRAP_PYTHON="
 where py >nul 2>&1
 if not errorlevel 1 (
-    py -3.13 -c "import sys; raise SystemExit(0 if sys.maxsize ^> 2**32 else 1)" >nul 2>&1
-    if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=py -3.13"
+    py -3.12 -c "import sys; raise SystemExit(0 if sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+    if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=py -3.12"
+)
+
+if not defined ROUGE_BOOTSTRAP_PYTHON (
+    where py >nul 2>&1
+    if not errorlevel 1 (
+        py -3.13 -c "import sys; raise SystemExit(0 if sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+        if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=py -3.13"
+    )
 )
 
 if not defined ROUGE_BOOTSTRAP_PYTHON (
     where python >nul 2>&1
     if not errorlevel 1 (
-        python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) and sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+        python -c "import sys; raise SystemExit(0 if sys.version_info[:2] in ((3, 12), (3, 13)) and sys.maxsize ^> 2**32 else 1)" >nul 2>&1
         if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=python"
     )
 )
 
 if not defined ROUGE_BOOTSTRAP_PYTHON (
-    echo [ERROR] Python 3.13 x64 was not found.
-    echo Install Python 3.13 x64, enable the Python launcher or PATH option, and retry.
+    echo [ERROR] Python 3.12 or 3.13 x64 was not found.
+    echo Install Python 3.12 x64, enable the Python launcher or PATH option, and retry.
     exit /b 1
 )
 
@@ -44,7 +52,14 @@ if errorlevel 1 (
 
 echo.
 set "ROUGE_PYTHON=%ROUGE_ROOT%.venv\Scripts\python.exe"
-if not exist "%ROUGE_PYTHON%" (
+if exist "%ROUGE_PYTHON%" (
+    "%ROUGE_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info[:2] in ((3, 12), (3, 13)) and sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+    if errorlevel 1 (
+        echo [ERROR] The existing .venv is not using 64-bit Python 3.12 or 3.13.
+        echo Remove or rename .venv, then run setup_windows.bat again.
+        exit /b 1
+    )
+) else (
     if exist "%ROUGE_ROOT%.venv" (
         echo [ERROR] .venv exists but is not a usable Windows virtual environment.
         echo Remove or rename .venv, then run setup_windows.bat again.
@@ -57,6 +72,8 @@ if not exist "%ROUGE_PYTHON%" (
         exit /b 1
     )
 )
+
+for /f "tokens=*" %%P in ('"%ROUGE_PYTHON%" -c "import platform; print(platform.python_version())"') do echo Using Python %%P
 
 echo Upgrading pip and build support...
 "%ROUGE_PYTHON%" -m pip install --upgrade pip setuptools wheel

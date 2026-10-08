@@ -18,6 +18,12 @@ if os.name != "nt":
 if platform.machine().upper() not in {"AMD64", "X86_64"}:
     fail(f"Windows x64 is required; detected {platform.machine()}.")
 
+if sys.version_info[:2] not in {(3, 12), (3, 13)}:
+    fail(
+        f"Python 3.12 or 3.13 is required on Windows; detected "
+        f"{sys.version_info.major}.{sys.version_info.minor}."
+    )
+
 try:
     import pynvml
 

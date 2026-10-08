@@ -9,8 +9,8 @@ Crucially, it also integrates NVIDIA's `nvidia-ml-py` (imported as `pynvml`) to 
 
 ## Hardware & System Requirements
 *   **Target Hardware:** NVIDIA RTX 5050 Laptop GPU (**8GB VRAM**)
-*   **Python Version:** Python 3.13
-*   **Windows RTX 5050:** Python 3.13 x64 with pip, a current NVIDIA R580-or-newer driver, and Microsoft Visual C++ Redistributable. `setup_windows.bat` creates `.venv` and installs the CUDA 13.0 `llama-cpp-python` wheel for native Blackwell support.
+*   **Python Version:** Windows supports Python 3.12 or 3.13 x64; Linux uses Python 3.13.
+*   **Windows RTX 5050:** Python 3.12 x64 is recommended and Python 3.13 x64 is supported, both with pip. A current NVIDIA R580-or-newer driver and Microsoft Visual C++ Redistributable are also required. `setup_windows.bat` prefers Python 3.12, creates `.venv`, and installs the CUDA 13.0 `llama-cpp-python` wheel for native Blackwell support.
 *   **Linux:** Python 3.13 with uv; the existing CUDA 12.4 `llama-cpp-python` wheel remains selected.
 *   **Models:** Qwen 2.5 1.5B Instruct (GGUF format: INT4 & INT8)
 

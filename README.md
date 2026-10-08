@@ -53,7 +53,8 @@ requirements-windows.txt / requirements-linux.txt
 - NVIDIA GPU with enough VRAM to hold the Q4 and Q8 models simultaneously;
   the target system is an 8 GB RTX 5050.
 - Current NVIDIA driver with working `nvidia-smi` and NVML access.
-- Python 3.13 x64. Windows uses its bundled `venv` and `pip`; Linux uses
+- Python 3.12 or 3.13 x64 on Windows; Python 3.13 on Linux. Windows uses
+  Python's bundled `venv` and `pip`, while Linux uses
   [uv](https://docs.astral.sh/uv/).
 - Approximately 3 GB of storage for the two GGUF model files, in addition to
   the Python environment and model caches.
@@ -66,8 +67,9 @@ configuration starts successfully.
 ### Windows 10/11 with RTX 5050
 
 Windows uses the CUDA 13.0 `llama-cpp-python` wheel for native Blackwell
-support. Install an R580-or-newer NVIDIA Game Ready or Studio driver and the
-Microsoft Visual C++ 2015–2022 Redistributable before setup.
+support. Python 3.12 x64 is recommended and Python 3.13 x64 is also supported.
+Install an R580-or-newer NVIDIA Game Ready or Studio driver and the Microsoft
+Visual C++ 2015–2022 Redistributable before setup.
 
 #### First-time setup
 
@@ -80,7 +82,8 @@ setup_windows.bat
 
 `setup_windows.bat` performs the following operations:
 
-1. Confirms that Python 3.13 x64, `nvidia-smi`, and an NVIDIA GPU are available.
+1. Finds Python 3.12 or 3.13 x64, preferring 3.12 when both are installed, and
+   confirms that `nvidia-smi` and an NVIDIA GPU are available.
 2. Creates `.venv` with `python -m venv` and upgrades pip tooling.
 3. Removes any stale CPU or CUDA build of `llama-cpp-python`, then installs
    `requirements-windows.txt`, including `llama-cpp-python 0.3.35` from the
@@ -128,8 +131,9 @@ model initialization reports a CUDA allocation or compute-buffer failure.
 | Error | Action |
 |---|---|
 | `nvidia-smi was not found` | Install or repair the NVIDIA driver, then reopen Command Prompt. |
-| Python 3.13 x64 was not found | Install 64-bit Python 3.13 and enable either the `py` launcher or the PATH option. |
-| `.venv` is not a usable Windows environment | Remove or rename `.venv`, then run `setup_windows.bat` again. |
+| Python 3.12 or 3.13 x64 was not found | Install 64-bit Python 3.12 (recommended) and enable either the `py` launcher or PATH option. |
+| `.venv` is missing a Windows Python executable | Remove or rename `.venv`, then run `setup_windows.bat` again. |
+| `.venv` uses an unsupported or 32-bit Python | Recreate it with 64-bit Python 3.12 or 3.13. |
 | Driver is older than R580 | Install a current Game Ready or Studio driver. |
 | `llama-cpp-python is not CUDA-enabled` | Run `setup_windows.bat` again; do not replace its CUDA wheel with the PyPI CPU build. |
 | CUDA or DLL import failure | Install the Visual C++ 2015–2022 Redistributable and rerun setup. |
@@ -146,8 +150,9 @@ rmdir /s /q .venv
 setup_windows.bat
 ```
 
-This removal is optional and should only be used when `.venv` is broken or was
-copied from Linux. Model files under `Setup\models` are not affected.
+This removal is optional and should only be used when `.venv` is broken, uses
+an unsupported Python version, or was copied from Linux. Model files under
+`Setup\models` are not affected.
 
 ### Linux with NVIDIA GPU
 
