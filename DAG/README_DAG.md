@@ -1,7 +1,7 @@
 # RouGE DAG Module: VRAM-Gated Decomposition (Contract 2 & Phase 3)
 
 ## Overview
-This module represents the cognitive routing core of the RouGE architecture (Phase 3). It receives complex, mixed-intent user prompts and dynamically breaks them down into atomic sub-tasks (Directed Acyclic Graphs). 
+This module represents the cognitive routing core of the RouGE architecture (Phase 3). It receives classifier labels (`simple`, `complex`, or `mixed_intent`) and dynamically breaks complex work into bounded DAGs of no more than four essential sub-tasks per decomposition step.
 
 Instead of relying on static rules, the decomposition engine actively queries the edge hardware (`Setup` API) for live VRAM availability. If memory is sufficient, it uses the INT4 model to recursively split the tasks. If the INT4 model hallucinates an invalid graph structure, the system triggers the **Phase 2.5 Safety Fallback**, seamlessly routing that specific sub-task to the higher-precision INT8 model.
 
@@ -11,8 +11,10 @@ Instead of relying on static rules, the decomposition engine actively queries th
 
 This folder contains the core logic for structural validation and recursive routing:
 
-*   **`decompose.py`:** The main recursive engine. It queries the live RTX 5050 telemetry, communicates with the INT4 model to generate sub-tasks, and handles the multi-level tree generation.
-*   **`dag_models.py`:** The strict validation layer. Uses `pydantic` to enforce JSON schema correctness and `networkx` to ensure the generated sub-tasks form a valid topological order without infinite loops.
+*   **`decompose.py`:** The main recursive engine. It queries live GPU telemetry, communicates with the INT4 model, stops tasks marked `atomic`, and preserves dependencies for execution.
+*   **`dag_models.py`:** The strict validation layer. It uses `pydantic` to limit graph size and enforce schema correctness, rejects duplicate tasks, and uses `networkx` to ensure a valid topological order without cycles.
+
+Downstream leaf tasks receive the completed results of the nodes they depend on. This allows workflows such as `write story → extract lessons from that story → propose daily actions` to operate on the generated artifact instead of answering each task without context.
 
 *(Note: The mock fixture files and local unit tests have been deprecated and removed, as the module now communicates directly with the live hardware backend.)*
 
@@ -42,6 +44,7 @@ To visualize the **DAG generation**, evaluate the **VRAM-gating logic**, and obs
 From the root of the `RouGE` project, run the batch script:
 
 ```powershell
+.\setup_windows.bat
 .\start_rouge.bat
 ```
 
@@ -118,6 +121,6 @@ Complex Prompt
 
 ## Known Limitations
 
-*   The response produced by the INT8 fallback inside `decompose()` is currently discarded — the UI re-executes fallback nodes itself rather than reusing that text.
-*   Decomposition is triggered by a coarse token threshold (`> 30` tokens) in addition to intent type; this is not yet aligned with the classifier's 4000-token escalation threshold.
+*   Leaf execution is sequential; independent DAG nodes are not run in parallel yet.
+*   The telemetry fallback still assumes 2048 MB free when the API cannot be reached.
 *   `decompose.py` optimistically assumes 2048 MB of free VRAM if the `Setup` telemetry endpoint is unreachable.

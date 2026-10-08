@@ -1,129 +1,243 @@
+"""Streamlit interface for the integrated RouGE pipeline."""
+
+from __future__ import annotations
+
+import re
+
 import streamlit as st
-import os
-import sys
 
-dag_path = os.path.join(os.path.dirname(__file__), "DAG")
-sys.path.append(dag_path)
+from benchmark import BenchmarkOutcome, latest_opposite_run, run_benchmark
+from DAG.decompose import DecompNode, get_free_vram_mb
+from Setup.generation import CONTEXT_SIZE
 
-from dag_models import DagNode
-from decompose import decompose, get_free_vram_mb, call_int8_engine
 
 st.set_page_config(page_title="RouGE Unified Pipeline", layout="wide")
 
-# ==========================================
-# PHASE 1: CLASSIFICATION (Placeholder)
-# ==========================================
-def run_contract1_classifier(prompt: str):
-    """
-    TODO: When Person A finishes the classification folder, import their function here.
-    For now, this provides a manual override so you can test the pipeline.
-    """
-    token_length = len(prompt.split())
-    # Simple heuristic for testing: if it has "and" or "then", call it mixed_intent
-    if " and " in prompt.lower() or " then " in prompt.lower():
-        return "mixed_intent", token_length
-    return "single_intent", token_length
 
-# ==========================================
-# PHASE 2: DAG VISUALIZATION HELPER
-# ==========================================
-def build_mermaid_chart(node, graph_lines=None, parent_id=None):
+def _mermaid_id(node_id: str) -> str:
+    """Return an identifier accepted by Mermaid."""
+    return "node_" + re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
+
+
+def build_mermaid_chart(
+    node: DecompNode,
+    graph_lines: list[str] | None = None,
+    parent_id: str | None = None,
+) -> str:
     if graph_lines is None:
         graph_lines = ["graph TD"]
-    
-    safe_text = node.text.replace('"', "'").replace("\n", " ")[:40] + "..."
-    current_id = node.node_id
-    
+
+    safe_text = node.text.replace('"', "'").replace("\n", " ")[:60]
+    if node.atomic:
+        safe_text = f"[atomic] {safe_text}"
+    current_id = _mermaid_id(node.node_id)
+
     if node.resolved_via == "int8_fallback":
-        shape = f"{current_id}>INT8 Fallback:<br>{safe_text}]"
+        shape = f'{current_id}>"INT8 Fallback:<br>{safe_text}"]'
     elif node.resolved_via == "decomposed":
-        shape = f"{current_id}{{INT4 Decomposed:<br>{safe_text}}}"
+        shape = f'{current_id}{{"INT4 Decomposed:<br>{safe_text}"}}'
     else:
-        shape = f"{current_id}[Leaf Node:<br>{safe_text}]"
-        
+        shape = f'{current_id}["Leaf Node:<br>{safe_text}"]'
+
     graph_lines.append(shape)
-    
     if parent_id:
         graph_lines.append(f"{parent_id} --> {current_id}")
-        
+
     for child in node.children:
         build_mermaid_chart(child, graph_lines, current_id)
-        
+
+    for dependency in node.dependencies:
+        graph_lines.append(f"{_mermaid_id(dependency)} -. context .-> {current_id}")
+
     return "\n".join(graph_lines)
 
-def extract_executable_tasks(node, task_list=None):
-    """Recursively fetch all nodes that need final execution."""
-    if task_list is None:
-        task_list = []
-    
-    if node.resolved_via in ["leaf", "int8_fallback"]:
-        task_list.append(node)
-    
-    for child in node.children:
-        extract_executable_tasks(child, task_list)
-        
-    return task_list
 
-# ==========================================
-# UI LAYOUT & EXECUTION
-# ==========================================
+def _format_metric(value: float | None, suffix: str, decimals: int = 2) -> str:
+    if value is None:
+        return "Unavailable"
+    return f"{value:.{decimals}f} {suffix}".strip()
+
+
+def render_run_metrics(outcome: BenchmarkOutcome) -> None:
+    metrics = outcome.metrics
+    st.subheader("Run Measurements")
+    first_row = st.columns(4)
+    first_row[0].metric("Mode", "Normal INT8" if outcome.mode == "normal" else "RouGE")
+    first_row[1].metric("End-to-end time", _format_metric(metrics.duration_seconds, "s"))
+    first_row[2].metric("GPU energy", _format_metric(metrics.energy_joules, "J"))
+    first_row[3].metric("Peak VRAM", _format_metric(metrics.peak_used_vram_mb, "MB", 0))
+
+    second_row = st.columns(4)
+    second_row[0].metric("Average power", _format_metric(metrics.average_power_w, "W"))
+    second_row[1].metric("Peak power", _format_metric(metrics.peak_power_w, "W"))
+    second_row[2].metric("Peak temperature", _format_metric(metrics.peak_temperature_c, "°C", 0))
+    second_row[3].metric("Peak GPU utilization", _format_metric(metrics.peak_gpu_util_pct, "%", 0))
+    st.caption(
+        f"Run ID: {outcome.run_id} · Telemetry samples: {metrics.sample_count} · "
+        f"Input/output tokens observed: {outcome.input_tokens}/{outcome.output_tokens}"
+    )
+
+
+def _as_float(row: dict[str, str], field: str) -> float | None:
+    try:
+        return float(row[field]) if row.get(field) not in {None, ""} else None
+    except (TypeError, ValueError):
+        return None
+
+
+def render_latest_comparison(outcome: BenchmarkOutcome) -> None:
+    opposite = latest_opposite_run(outcome.prompt_hash, outcome.mode)
+    st.subheader("Latest Same-Prompt Comparison")
+    if opposite is None:
+        other = "Middleware" if outcome.mode == "normal" else "Normal"
+        st.info(
+            f"Run this same prompt once in {other} mode to populate the comparison."
+        )
+        return
+
+    fields = [
+        ("End-to-end time", "duration_seconds", "s"),
+        ("GPU energy", "energy_joules", "J"),
+        ("Average power", "average_power_w", "W"),
+        ("Peak power", "peak_power_w", "W"),
+        ("Peak VRAM", "peak_used_vram_mb", "MB"),
+        ("Peak temperature", "peak_temperature_c", "°C"),
+        ("Peak GPU utilization", "peak_gpu_util_pct", "%"),
+    ]
+    current_metrics = outcome.metrics.__dict__
+    rows = []
+    for label, field, unit in fields:
+        current = current_metrics.get(field)
+        previous = _as_float(opposite, field)
+        normal = current if outcome.mode == "normal" else previous
+        middleware = current if outcome.mode == "middleware" else previous
+        delta = None if normal in {None, 0} or middleware is None else (
+            (middleware - normal) / normal * 100.0
+        )
+        rows.append(
+            {
+                "Metric": label,
+                "Normal": "—" if normal is None else f"{normal:.2f} {unit}",
+                "Middleware": "—" if middleware is None else f"{middleware:.2f} {unit}",
+                "Middleware vs Normal": "—" if delta is None else f"{delta:+.1f}%",
+            }
+        )
+    st.dataframe(rows, use_container_width=True, hide_index=True)
+    st.caption(
+        "Negative percentages mean the middleware used less or completed faster. "
+        "A single pair is preliminary; repeat runs under similar GPU conditions."
+    )
+
+
+def render_session_answer_comparison(
+    outcome: BenchmarkOutcome, outcomes: dict[tuple[str, str], BenchmarkOutcome]
+) -> bool:
+    normal = outcomes.get((outcome.prompt_hash, "normal"))
+    middleware = outcomes.get((outcome.prompt_hash, "middleware"))
+    if normal is None or middleware is None or not normal.success or not middleware.success:
+        return False
+
+    st.subheader("Answer Comparison")
+    normal_tab, middleware_tab = st.tabs(["Normal INT8", "RouGE Middleware"])
+    with normal_tab:
+        st.markdown(normal.answer)
+    with middleware_tab:
+        st.markdown(middleware.answer)
+    return True
+
+
+def render_middleware_details(outcome: BenchmarkOutcome) -> None:
+    result = outcome.pipeline_result
+    if result is None:
+        return
+    st.subheader("Phase 1: Classification")
+    st.success(
+        f"Classified as **{result.classification.aggregate_label}** "
+        f"across {len(result.classification.clauses)} clause(s)."
+    )
+    if result.classification.clauses:
+        st.dataframe(
+            [clause.model_dump() for clause in result.classification.clauses],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    st.subheader("Phase 2: VRAM-Gated Decomposition")
+    st.markdown(f"```mermaid\n{build_mermaid_chart(result.tree)}\n```")
+
+    st.subheader("Phase 3: Task Execution")
+    tabs = st.tabs(
+        [f"Task {index}" for index in range(1, len(result.task_results) + 1)]
+    )
+    for tab, task in zip(tabs, result.task_results):
+        with tab:
+            st.caption(
+                f"Node: {task.node_id} · Resolved via: {task.resolved_via} · "
+                f"Tokens: {task.input_tokens} in / {task.generated_tokens} out"
+            )
+            st.markdown("**Instruction**")
+            st.code(task.instruction, language=None)
+            st.markdown("**Response**")
+            st.write(task.response)
+
+
 st.title("RouGE Architecture: End-to-End Pipeline")
-st.markdown(f"**Hardware Status:** RTX 5050 | **Free VRAM:** `{get_free_vram_mb():.0f} MB`")
-st.markdown("---")
+st.markdown(
+    f"**Hardware Status:** NVIDIA GPU | "
+    f"**Free VRAM:** `{get_free_vram_mb():.0f} MB` | "
+    f"**Context:** `{CONTEXT_SIZE} tokens`"
+)
+st.divider()
 
-prompt = st.text_area("Enter a user prompt:", height=100, placeholder="e.g., Summarize the incident report and then draft a follow-up email...")
-
-# Manual override for testing Phase 2 until Phase 1 is integrated
-intent_override = st.selectbox(
-    "Force Intent Type (For Testing):", 
-    ["auto", "single_intent", "mixed_intent", "length_escalated"]
+prompt = st.text_area(
+    "Enter a user prompt:",
+    height=120,
+    placeholder="e.g., Summarize the incident report and then draft a follow-up email...",
 )
 
-if st.button("Execute Pipeline", type="primary"):
-    if not prompt:
+use_middleware = st.toggle(
+    "Use RouGE middleware",
+    value=False,
+    help="Off sends the prompt directly to INT8. On runs classification, DAG routing, execution, and synthesis.",
+)
+selected_mode = "middleware" if use_middleware else "normal"
+st.caption(
+    "Selected mode: **RouGE Middleware**" if use_middleware
+    else "Selected mode: **Normal Direct INT8**"
+)
+
+if st.button("Execute Prompt", type="primary"):
+    if not prompt.strip():
         st.warning("Please enter a prompt.")
     else:
-        # --- PHASE 1 ---
-        with st.status("Phase 1: Classification", expanded=True) as status:
-            st.write("Routing through Contract 1...")
-            auto_intent, tokens = run_contract1_classifier(prompt)
-            
-            final_intent = auto_intent if intent_override == "auto" else intent_override
-            st.success(f"Classified as: **{final_intent}** ({tokens} tokens)")
-            status.update(label="Phase 1 Complete", state="complete", expanded=False)
+        spinner = (
+            "Classifying, decomposing, executing, and synthesizing..."
+            if use_middleware
+            else "Running direct INT8 baseline..."
+        )
+        with st.spinner(spinner):
+            outcome = run_benchmark(prompt, selected_mode)
+        st.session_state["last_benchmark_outcome"] = outcome
+        stored_outcomes = st.session_state.setdefault("benchmark_outcomes", {})
+        stored_outcomes[(outcome.prompt_hash, outcome.mode)] = outcome
 
-        # --- PHASE 2 ---
-        with st.status("Phase 2: VRAM-Gated Decomposition", expanded=True) as status:
-            st.write("Evaluating hardware limits and splitting tasks...")
-            root = DagNode(
-                node_id="eval_root", 
-                text=prompt, 
-                intent_type=final_intent, 
-                token_length=tokens
-            )
-            
-            tree = decompose(root, depth=0, original_full_prompt=prompt)
-            
-            st.markdown("### DAG Topology")
-            mermaid_code = build_mermaid_chart(tree)
-            st.markdown(f"```mermaid\n{mermaid_code}\n```")
-            status.update(label="Phase 2 Complete", state="complete", expanded=False)
+outcome = st.session_state.get("last_benchmark_outcome")
+if outcome is not None:
+    if not outcome.success:
+        st.error(f"{outcome.mode.title()} execution failed: {outcome.error}")
+    else:
+        render_run_metrics(outcome)
+        render_latest_comparison(outcome)
+        if outcome.mode == "middleware":
+            render_middleware_details(outcome)
+        compared_answers = render_session_answer_comparison(
+            outcome, st.session_state.get("benchmark_outcomes", {})
+        )
+        if not compared_answers:
+            st.subheader("Final Answer")
+            st.markdown(outcome.answer)
 
-        # --- PHASE 3 ---
-        st.subheader("Phase 3: Final Execution (INT8)")
-        tasks = extract_executable_tasks(tree)
-        
-        if not tasks:
-            st.info("No executable tasks found.")
-        else:
-            # Create a visual tab for each sub-task to keep the UI clean
-            tabs = st.tabs([f"Task {i+1}" for i in range(len(tasks))])
-            
-            for idx, (tab, task) in enumerate(zip(tabs, tasks)):
-                with tab:
-                    st.markdown(f"**Instruction:** `{task.text}`")
-                    with st.spinner("Generating answer..."):
-                        # Send the specific sub-task to your live INT8 engine
-                        answer = call_int8_engine(task.text)
-                        st.markdown("**AI Response:**")
-                        st.info(answer)
+    if outcome.warnings:
+        with st.expander("Run warnings"):
+            for warning in outcome.warnings:
+                st.warning(warning)

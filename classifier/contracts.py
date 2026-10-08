@@ -7,7 +7,13 @@ from __future__ import annotations
 from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
-TaskType = Literal["summarization", "extraction", "code_generation", "unknown"]
+TaskType = Literal[
+    "summarization",
+    "extraction",
+    "code_generation",
+    "creative_writing",
+    "unknown",
+]
 Entropy = Literal["low", "high"]
 Label = Literal["simple", "complex", "mixed_intent"]
 

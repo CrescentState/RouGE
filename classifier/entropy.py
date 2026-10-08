@@ -14,6 +14,9 @@ TYPE_PRIOR = {
     "summarization": "low",
     "extraction": "low",
     "code_generation": "high",
+    # A standalone creative request can be executed directly. When it is
+    # combined with another task type, aggregation still produces mixed_intent.
+    "creative_writing": "low",
     "unknown": "high",          # conservative fallback
 }
 

@@ -10,7 +10,8 @@ Crucially, it also integrates NVIDIA's `nvidia-ml-py` (imported as `pynvml`) to 
 ## Hardware & System Requirements
 *   **Target Hardware:** NVIDIA RTX 5050 Laptop GPU (**8GB VRAM**)
 *   **Python Version:** Python 3.13
-*   **Drivers:** [NVIDIA CUDA Toolkit 12.4](https://developer.nvidia.com/cuda-12-4-0-download-archive) & Microsoft Visual C++ Redistributable (the CUDA `bin` dir must be on `PATH` so `llama_cpp` can load its CUDA DLLs)
+*   **Windows RTX 5050:** current NVIDIA R580-or-newer driver and Microsoft Visual C++ Redistributable. The project selects the CUDA 13.0 `llama-cpp-python` wheel on Windows for native Blackwell support.
+*   **Linux:** the existing CUDA 12.4 `llama-cpp-python` wheel remains selected.
 *   **Models:** Qwen 2.5 1.5B Instruct (GGUF format: INT4 & INT8)
 
 ---
@@ -37,7 +38,21 @@ This downloads the **INT4** and **INT8 GGUF model weights** of Qwen 2.5 1.5B Ins
 
 Start the FastAPI application using **Uvicorn** from inside `Setup/`. On boot it loads **both models into VRAM** and starts the background telemetry logger.
 
-> **Prerequisite:** the server will not start without an accessible NVIDIA GPU — CUDA 12.4 runtime on `PATH` (for `llama_cpp` DLLs) and an NVIDIA driver (for `nvidia-ml-py`) — and both `.gguf` files present under `Setup/models/`.
+> **Prerequisite:** the server will not start without an accessible NVIDIA GPU,
+> a compatible CUDA-enabled `llama-cpp-python` installation, NVML access, and
+> both `.gguf` files under `Setup/models/`. Native Windows users should run
+> `setup_windows.bat`, then `start_rouge.bat`, from the repository root.
+
+The Windows launcher defaults to context 2048 and batch 256 on the 8 GB RTX
+5050. It performs driver/model checks and polls `/telemetry` until the API is
+ready. Override either value before launching only after the conservative
+configuration works:
+
+```bat
+set ROUGE_CONTEXT_SIZE=4096
+set ROUGE_BATCH_SIZE=512
+start_rouge.bat
+```
 
 ```bash
 cd Setup
@@ -51,6 +66,10 @@ Once the server is running, the API interactive documentation (**Swagger UI**) i
 ---
 
 ## API Endpoints (Contract 3)
+
+### `POST /token-count`
+
+Counts the fully formatted Qwen prompt with the selected engine before generation. The response reports the context size, available output tokens, requested output reserve, safety margin, and whether the request fits. The integrated pipeline uses this endpoint to batch oversized synthesis inputs.
 
 ### `GET /telemetry`
 
@@ -85,9 +104,35 @@ Routes sub-tasks to the requested model precision and returns the generated outp
 ```json
 {
   "response": "The root cause was a server timeout due to high traffic.",
-  "latency_seconds": 1.45
+  "latency_seconds": 1.45,
+  "input_tokens": 120,
+  "generated_tokens": 42,
+  "max_tokens_used": 512,
+  "context_size": 4096
 }
 ```
+
+The server reserves a 128-token safety margin, dynamically clamps `max_tokens` to the remaining context, and returns HTTP 413 when the formatted input leaves fewer than 32 useful output tokens. Qwen generation stops at `<|im_end|>`.
+
+Both engines default to a 4096-token context. Override the shared value before startup when needed:
+
+```bash
+ROUGE_CONTEXT_SIZE=2048 ../.venv/bin/python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+The prompt-processing batch defaults to 512 tokens. If llama.cpp reports
+`failed to allocate compute pp buffers`, first verify that another API process
+is not already running. The server now prevents duplicate model residency with
+an operating-system process lock. On a genuinely memory-constrained launch,
+reduce both context and batch size:
+
+```bash
+ROUGE_CONTEXT_SIZE=2048 ROUGE_BATCH_SIZE=256 \
+../.venv/bin/python -m uvicorn api:app --host 0.0.0.0 --port 8000
+```
+
+The lock is released automatically when the API process exits, including after
+a crash, so a stale lock file does not block a later restart.
 
 ---
 

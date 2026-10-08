@@ -1,0 +1,52 @@
+{"id":"sum_001","prompt":"Prepare a short briefing of the quarterly operations review.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_002","prompt":"In two sentences, explain the main argument made in the passage.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_003","prompt":"Turn these workshop notes into three concise takeaways.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_004","prompt":"Give an executive overview of the proposed migration plan.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_005","prompt":"Briefly recap what happened during the service outage.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_006","prompt":"Distill the discussion below into the decisions that were made.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_007","prompt":"Provide a plain-language synopsis of this technical proposal.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"sum_008","prompt":"Condense the customer interview into the most important observations.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"summarization"}
+{"id":"ext_001","prompt":"Return every IP address found in these logs.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_002","prompt":"List the owners and deadlines specified in the project plan.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_003","prompt":"Find all currency amounts in the invoice text.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_004","prompt":"Which API routes are named in this specification?","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_005","prompt":"Pull the commit hashes and branch names from this terminal output.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_006","prompt":"Identify each risk together with its assigned severity.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_007","prompt":"Extract the medicine names and dosages from this sample note.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"ext_008","prompt":"Give me only the filenames mentioned in the build report.","expected_task_types":["extraction"],"expected_aggregate":"simple","group":"extraction"}
+{"id":"code_001","prompt":"Implement a Python context manager for a database transaction.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_002","prompt":"Create a TypeScript function that groups records by status.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_003","prompt":"Fix this deadlock in the worker pool implementation.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_004","prompt":"Write a SQL migration to backfill the new account identifier.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_005","prompt":"Add property-based tests for this parser.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_006","prompt":"Build a small React hook that debounces a search query.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_007","prompt":"Refactor the retry loop so it uses exponential backoff.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"code_008","prompt":"Write a Docker health check for the HTTP service.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"code_generation"}
+{"id":"mix_001","prompt":"Summarize the incident report and also write a Python check for the failing endpoint.","expected_task_types":["summarization","code_generation"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_002","prompt":"Extract the action items. Then provide a brief recap of the meeting.","expected_task_types":["extraction","summarization"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_003","prompt":"List every error code, and then create a regex that recognizes those codes.","expected_task_types":["extraction","code_generation"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_004","prompt":"Write a unit test for this function. Additionally, summarize why the original implementation failed.","expected_task_types":["code_generation","summarization"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_005","prompt":"Give a concise overview of the API proposal; after that, extract all endpoint paths.","expected_task_types":["summarization","extraction"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_006","prompt":"Find the customer email addresses. Next, write a script that validates each address.","expected_task_types":["extraction","code_generation"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_007","prompt":"Implement the missing cache method and also prepare a short explanation of the change.","expected_task_types":["code_generation","summarization"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_008","prompt":"Summarize the release notes. Then identify every deprecated setting.","expected_task_types":["summarization","extraction"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_009","prompt":"Extract the table totals; moreover, write a SQL query that reproduces them.","expected_task_types":["extraction","code_generation"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"mix_010","prompt":"Create a bash backup command. After that, give a two-sentence summary of what it does.","expected_task_types":["code_generation","summarization"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"unknown_001","prompt":"Imagine a city where memories can be traded as currency.","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"unknown_002","prompt":"What would friendship mean to an immortal being?","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"unknown_003","prompt":"Argue whether beauty can exist without an observer.","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"unknown_004","prompt":"Describe the feeling of returning to a place that no longer exists.","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"unknown_005","prompt":"Invent a board game played with shadows and bells.","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"unknown_006","prompt":"Should a promise remain binding after everyone forgets it?","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"unknown"}
+{"id":"seg_001","prompt":"Write code that prints \"and then continue\" to the console.","expected_task_types":["code_generation"],"expected_aggregate":"complex","group":"segmentation"}
+{"id":"seg_002","prompt":"Summarize the phrase `first and then second` without splitting the quoted command.","expected_task_types":["summarization"],"expected_aggregate":"simple","group":"segmentation"}
+{"id":"creative_001","prompt":"Write a brief tale about a sailor who learns humility.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_002","prompt":"Compose a poem about sunlight entering an empty room.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_003","prompt":"Create a scene where two rivals must cooperate.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_004","prompt":"Tell a fable about a proud crow and a patient tortoise.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_005","prompt":"Draft a monologue for an astronaut returning to Earth.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_006","prompt":"Invent a legend about a bell that rings beneath the sea.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_007","prompt":"Write an imaginary diary entry from a mountain climber.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"creative_008","prompt":"Create a gentle fantasy story about a library that appears at night.","expected_task_types":["creative_writing"],"expected_aggregate":"simple","group":"creative_writing"}
+{"id":"mix_011","prompt":"Give me a story about courage and extract its main lessons.","expected_task_types":["creative_writing","extraction"],"expected_aggregate":"mixed_intent","group":"mixed_intent"}
+{"id":"seg_003","prompt":"Explain the relationship between research and development.","expected_task_types":["unknown"],"expected_aggregate":"complex","group":"segmentation"}

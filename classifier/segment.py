@@ -12,6 +12,16 @@ _CONNECTORS = re.compile(
     r"(?:,\s*|\s+)(?:and then|and also|also|additionally|then|besides|"
     r"next|after that|furthermore|moreover)(?:\s+)", re.IGNORECASE)
 
+# Plain "and" is only a task boundary when it introduces another explicit
+# imperative. This handles "write a story and extract its lessons" without
+# breaking noun phrases such as "research and development".
+_PLAIN_AND_TASK = re.compile(
+    r"\s+and\s+(?=(?:analyze|build|compose|create|describe|draft|explain|extract|"
+    r"find|fix|generate|give|identify|implement|list|provide|return|show|suggest|"
+    r"summarize|tell|write)\b)",
+    re.IGNORECASE,
+)
+
 _SENT_SPLIT = re.compile(r"(?<=[.!?;])\s+")
 
 # An 'and' inside quotes or code fences must not trigger a split.
@@ -37,7 +47,10 @@ def segment(prompt: str) -> list[str]:
 
     pieces: list[str] = []
     for sent in _SENT_SPLIT.split(masked):
-        parts = [p.strip() for p in _CONNECTORS.split(sent) if p.strip()]
+        parts = []
+        for explicit_part in _CONNECTORS.split(sent):
+            parts.extend(_PLAIN_AND_TASK.split(explicit_part))
+        parts = [p.strip() for p in parts if p.strip()]
         pieces.extend(parts if parts else [sent.strip()])
 
     out = []

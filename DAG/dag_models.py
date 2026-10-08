@@ -17,13 +17,14 @@ class DagValidationError(Exception):
 class DagNode(BaseModel):
     node_id: str = Field(..., min_length=1)
     text: str = Field(..., min_length=1)
-    intent_type: str  # e.g. "single_intent" | "mixed_intent" | "length_escalated"
+    intent_type: str  # "simple" | "complex" | "mixed_intent"
     token_length: int = Field(..., ge=0)
+    atomic: bool = False
 
     @field_validator("intent_type")
     @classmethod
     def known_intent_type(cls, v: str) -> str:
-        allowed = {"single_intent", "mixed_intent", "length_escalated"}
+        allowed = {"simple", "complex", "mixed_intent"}
         if v not in allowed:
             raise ValueError(f"intent_type '{v}' not in {allowed}")
         return v
@@ -37,8 +38,10 @@ class DagEdge(BaseModel):
 
 
 class DagPayload(BaseModel):
-    nodes: List[DagNode] = Field(..., min_length=1)
-    edges: List[DagEdge] = Field(default_factory=list)
+    # Small local models are much more reliable when the planner is forced to
+    # produce only the essential deliverables instead of an unbounded task list.
+    nodes: List[DagNode] = Field(..., min_length=1, max_length=4)
+    edges: List[DagEdge] = Field(default_factory=list, max_length=12)
 
 
 class Int4Response(BaseModel):
@@ -56,6 +59,7 @@ class Int4Response(BaseModel):
 class ValidatedDag(BaseModel):
     clause_id: str
     nodes: List[DagNode]
+    edges: List[DagEdge] = Field(default_factory=list)
     topo_order: List[str]  # node_ids in a valid execution order
 
     model_config = {"arbitrary_types_allowed": True}
@@ -88,6 +92,10 @@ def validate_dag_response(raw_response) -> ValidatedDag:
     if len(node_ids) != len(set(node_ids)):
         raise DagValidationError("duplicate node_id values in DAG", raw=str(payload))
 
+    normalized_texts = [" ".join(node.text.lower().split()) for node in parsed.dag.nodes]
+    if len(normalized_texts) != len(set(normalized_texts)):
+        raise DagValidationError("duplicate task text values in DAG", raw=str(payload))
+
     graph.add_nodes_from(node_ids)
 
     for edge in parsed.dag.edges:
@@ -110,6 +118,6 @@ def validate_dag_response(raw_response) -> ValidatedDag:
     return ValidatedDag(
         clause_id=parsed.clause_id,
         nodes=parsed.dag.nodes,
+        edges=parsed.dag.edges,
         topo_order=topo_order,
     )
-

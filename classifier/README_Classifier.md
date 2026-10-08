@@ -13,10 +13,16 @@ prompt ──▶ segment.py ──▶ embedder.py ──▶ aggregate.py ──�
                               └─ entropy.py (task prior + length escalation)
 ```
 
-1. **`segment.py`** — splits the prompt into clauses on sentence boundaries and coordinating connectors (`and then`, `also`, `then`, `;`, …). Connector words inside quotes / code fences are protected so they never trigger a false split.
+1. **`segment.py`** — splits the prompt into clauses on sentence boundaries and coordinating connectors (`and then`, `also`, `then`, `;`, …). Plain `and` is a boundary only when it introduces a recognized task verb, so `write a story and extract its lessons` splits while `research and development` does not. Connector words inside quotes / code fences are protected.
 2. **`embedder.py`** — embeds each clause. Uses `sentence-transformers/all-MiniLM-L6-v2` when available; otherwise falls back to a deterministic lexical-hash embedder so the module runs and tests on any box.
-3. **`entropy.py`** — labels each clause low/high entropy. Task-type prior: `summarization`/`extraction` → low, `code_generation`/`unknown` → high. Clauses below 4000 tokens stay at the prior; longer inputs escalate `low → high`.
+3. **`entropy.py`** — labels each clause low/high entropy. Task-type prior: `summarization`/`extraction`/`creative_writing` → low, `code_generation`/`unknown` → high. Clauses below 4000 tokens stay at the prior; longer inputs escalate `low → high`.
 4. **`aggregate.py`** — matches each clause against the **prototype bank** (`bank/prototype_bank.json`), computes best cosine similarity + margin, and returns a `Clause`. It then folds the clauses into one prompt-level label.
+
+## Bank and evaluation data
+
+The prototype bank contains 35 diverse anchors for each supported learned task type: summarization, extraction, code generation, and creative writing. `unknown` is intentionally not a prototype category; it is produced when confidence or margin falls below the configured thresholds.
+
+`data/evaluation.jsonl` contains held-out fixtures covering all four learned task types, mixed intent, unknown prompts, and segmentation edge cases. Each record includes the expected clause task types and aggregate label. See `data/README.md` for the schema. Asset tests ensure the bank remains balanced, fixture IDs remain unique, segmentation expectations are valid, and evaluation prompts do not leak into the prototype bank.
 
 ## Label rules (`aggregate.py`)
 
@@ -50,7 +56,7 @@ Unknown/mismatched clauses are labeled conservatively **high** entropy.
 }
 ```
 
-`task_type` ∈ `summarization | extraction | code_generation | unknown`
+`task_type` ∈ `summarization | extraction | code_generation | creative_writing | unknown`
 `base_entropy` ∈ `low | high`
 `aggregate_label` ∈ `simple | complex | mixed_intent`
 
@@ -84,8 +90,8 @@ uv run pytest classifier/tests -q
 
 Covers: simple label, mixed-intent splitting, no false split inside quotes, conservative unknown handling, and JSON serializability of the output.
 
-## Known limitations
+## Integration and known limitations
 
-* The UI (`ui.py`) still uses a placeholder classifier — this module is not wired into the running pipeline yet. `classify()` here is the intended replacement.
+* `pipeline.py` uses `classify()` for root prompts and for every generated DAG node. Its aggregate labels are the canonical routing labels used by the decomposer.
 * Out-of-bank prompts (confidence below `CONF_FLOOR`) become `unknown` → high entropy → `complex`/`mixed_intent`, sending them down the expensive decomposition path.
 * With the hash-fallback embedder, similarities are lower; the relaxed fallback thresholds above prevent the conservative path from triggering on CPU-only boxes.

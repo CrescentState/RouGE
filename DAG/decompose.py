@@ -12,18 +12,21 @@ Wired up to Person B's Contract 3 FastAPI server:
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass, field
 from typing import List, Optional
 import requests
 
-from dag_models import DagNode, ValidatedDag, DagValidationError, validate_dag_response
+from classifier import classify
+from Setup.generation import CONTEXT_SIZE
+from .dag_models import DagNode, ValidatedDag, validate_dag_response
 
 # --------------------------------------------------------------------------- #
 # Server Configuration
 # --------------------------------------------------------------------------- #
 
-API_URL = "http://localhost:8000"
+API_URL = os.getenv("ROUGE_API_URL", "http://127.0.0.1:8000").rstrip("/")
 _MOCK_FREE_VRAM_MB = 2048.0  # Safe fallback if server is unreachable
 
 
@@ -56,20 +59,54 @@ def has_vram_headroom(required_mb: float, safety_margin_mb: float = 512) -> bool
 # --------------------------------------------------------------------------- #
 
 INT4_DAG_SYSTEM_PROMPT = (
-    "You are a strict task decomposition planner. Given an input task, break it into "
-    "atomic sub-tasks and express them as a valid directed acyclic graph (DAG).\n"
+    "You are a strict task decomposition planner. Preserve every explicit deliverable "
+    "in the user's request and express only the essential work as a small directed "
+    "acyclic graph (DAG). Create no more than 4 nodes. Do not create generic background "
+    "tasks unless the user requested them. When one requested result depends on another, "
+    "for example lessons extracted from a story that must first be written, create an "
+    "edge from the producing task to the consuming task. Mark a task atomic when it can "
+    "be answered directly and must not be decomposed again. Every node text must be a "
+    "specific imperative instruction grounded in the user's topic. Never use placeholder "
+    "phrases such as 'first task', 'requested deliverable', or 'dependent task'. For a "
+    "request that creates content and then analyzes it, make the content itself the first "
+    "node and make the analysis explicitly refer to the generated content.\n"
     "Respond ONLY with a JSON object matching this schema:\n"
     "{\n"
     '  "nodes": [\n'
-    '    {"node_id": "n0", "text": "task text", "intent_type": "single_intent", "token_length": 5}\n'
+    '    {"node_id": "n0", "text": "SPECIFIC_FIRST_TASK_FROM_USER_REQUEST", "intent_type": "simple", "token_length": 6, "atomic": true},\n'
+    '    {"node_id": "n1", "text": "SPECIFIC_DEPENDENT_TASK_FROM_USER_REQUEST", "intent_type": "simple", "token_length": 7, "atomic": true}\n'
     "  ],\n"
     '  "edges": [\n'
     '    {"from": "n0", "to": "n1"}\n'
     "  ]\n"
     "}\n"
-    "allowed intent_type values: 'single_intent', 'mixed_intent', 'length_escalated'. "
+    "allowed intent_type values: 'simple', 'complex', 'mixed_intent'. Each node must "
+    "contain atomic as true or false. Never repeat the parent task as a child. "
     "Do not include any conversational filler."
 )
+
+_GENERIC_TASK_MARKERS = (
+    "specific_first_task_from_user_request",
+    "specific_dependent_task_from_user_request",
+    "requested deliverable",
+    "first task",
+    "dependent task",
+    "next task",
+)
+_ATOMIC_ARTIFACT_TASK = re.compile(
+    r"\b(?:write|create|compose|draft|tell|give)\b.*"
+    r"\b(?:story|poem|letter|email|essay|article|dialogue|script)\b",
+    re.IGNORECASE,
+)
+
+FALLBACK_SYSTEM_PROMPT = (
+    "Answer every explicit part of the original user request in one coherent, "
+    "self-contained response. Follow any requested format, ordering, headings, item "
+    "counts, or schema exactly. Produce requested artifacts such as stories, code, "
+    "letters, or plans in full, then include any requested analysis or extracted points. "
+    "Begin directly and do not discuss routing, DAGs, fallback, or internal processing."
+)
+FALLBACK_MAX_TOKENS = 1024
 
 
 def _extract_json_payload(raw_text: str) -> dict:
@@ -81,12 +118,12 @@ def _extract_json_payload(raw_text: str) -> dict:
     return json.loads(raw_clean)
 
 
-def call_int4_engine(node_text: str, node_id: str) -> dict:
+def call_int4_engine(node_text: str, node_id: str, request_id: Optional[str] = None) -> dict:
     """
     Calls the INT4 model over HTTP to decompose a complex/mixed node into a sub-DAG.
     """
     payload = {
-        "request_id": node_id,
+        "request_id": request_id or f"decompose:{node_id}",
         "baseline_mode": "VRAM-gated",
         "prompt": node_text,
         "engine": "INT4",
@@ -109,21 +146,92 @@ def call_int4_engine(node_text: str, node_id: str) -> dict:
     }
 
 
-def call_int8_engine(full_prompt: str) -> str:
+@dataclass
+class GenerationResult:
+    response: str
+    input_tokens: int = 0
+    generated_tokens: int = 0
+    max_tokens_used: int = 0
+    context_size: int = CONTEXT_SIZE
+
+
+@dataclass
+class TokenCountResult:
+    input_tokens: int
+    context_size: int
+    safety_margin_tokens: int
+    available_output_tokens: int
+    reserved_output_tokens: int
+    fits: bool
+
+
+def generate_int8(
+    prompt: str,
+    *,
+    request_id: str = "fallback_int8",
+    system_prompt: str = "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
+    max_tokens: int = 512,
+    purpose: str = "execution",
+    baseline_mode: Optional[str] = None,
+) -> GenerationResult:
     """
     Phase 2.5 Fallback: sends the full original prompt directly to the INT8 engine.
     """
     payload = {
-        "request_id": "fallback_int8",
-        "baseline_mode": "VRAM-gated",
-        "prompt": full_prompt,
+        "request_id": request_id,
+        "baseline_mode": baseline_mode or f"VRAM-gated:{purpose}",
+        "prompt": prompt,
         "engine": "INT8",
-        "system_prompt": "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
-        "max_tokens": 1024,
+        "system_prompt": system_prompt,
+        "max_tokens": max_tokens,
     }
     resp = requests.post(f"{API_URL}/generate", json=payload, timeout=90)
     resp.raise_for_status()
-    return resp.json()["response"]
+    data = resp.json()
+    return GenerationResult(
+        response=data["response"],
+        input_tokens=int(data.get("input_tokens", 0)),
+        generated_tokens=int(data.get("generated_tokens", 0)),
+        max_tokens_used=int(data.get("max_tokens_used", max_tokens)),
+        context_size=int(data.get("context_size", CONTEXT_SIZE)),
+    )
+
+
+def call_int8_engine(
+    prompt: str,
+    *,
+    request_id: str = "fallback_int8",
+    system_prompt: str = "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
+    max_tokens: int = 512,
+    purpose: str = "execution",
+) -> str:
+    """Backward-compatible text-only INT8 client."""
+    return generate_int8(
+        prompt,
+        request_id=request_id,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        purpose=purpose,
+    ).response
+
+
+def count_int8_tokens(
+    prompt: str,
+    *,
+    system_prompt: str,
+    reserved_output_tokens: int,
+    safety_margin_tokens: int = 128,
+) -> TokenCountResult:
+    payload = {
+        "prompt": prompt,
+        "engine": "INT8",
+        "system_prompt": system_prompt,
+        "reserved_output_tokens": reserved_output_tokens,
+        "safety_margin_tokens": safety_margin_tokens,
+    }
+    resp = requests.post(f"{API_URL}/token-count", json=payload, timeout=15)
+    resp.raise_for_status()
+    return TokenCountResult(**resp.json())
 
 
 # --------------------------------------------------------------------------- #
@@ -137,32 +245,38 @@ class DecompNode:
     intent_type: str
     token_length: int
     depth: int
+    atomic: bool = False
+    dependencies: List[str] = field(default_factory=list)
     children: List["DecompNode"] = field(default_factory=list)
     resolved_via: Optional[str] = None  # "decomposed" | "leaf" | "int8_fallback"
+    response: Optional[str] = None
+    generation: Optional[GenerationResult] = None
+    failure_reason: Optional[str] = None
 
 
 MAX_RECURSION_DEPTH = 4
-LENGTH_ESCALATION_TOKEN_THRESHOLD = 30
 EST_VRAM_COST_PER_DECOMPOSE_MB = 350
 
 
 def needs_further_decomposition(node: DagNode) -> bool:
-    if node.intent_type == "mixed_intent":
-        return True
-    if node.intent_type == "length_escalated":
-        return True
-    if node.token_length > LENGTH_ESCALATION_TOKEN_THRESHOLD:
-        return True
-    return False
+    return not node.atomic and node.intent_type in {"complex", "mixed_intent"}
 
 
-def decompose(node: DagNode, depth: int, original_full_prompt: str) -> DecompNode:
+def decompose(
+    node: DagNode,
+    depth: int,
+    original_full_prompt: str,
+    pipeline_id: str = "adhoc",
+    inherited_dependencies: Optional[List[str]] = None,
+) -> DecompNode:
     result = DecompNode(
         node_id=node.node_id,
         text=node.text,
         intent_type=node.intent_type,
         token_length=node.token_length,
         depth=depth,
+        atomic=node.atomic,
+        dependencies=list(inherited_dependencies or []),
     )
 
     if depth >= MAX_RECURSION_DEPTH:
@@ -178,18 +292,72 @@ def decompose(node: DagNode, depth: int, original_full_prompt: str) -> DecompNod
         return result
 
     try:
-        raw_response = call_int4_engine(node.text, node.node_id)
+        raw_response = call_int4_engine(
+            node.text,
+            node.node_id,
+            request_id=f"{pipeline_id}:decompose:{node.node_id}",
+        )
         validated: ValidatedDag = validate_dag_response(raw_response)
-    except (DagValidationError, Exception) as e:
+        parent_text = " ".join(node.text.lower().split())
+        if any(" ".join(child.text.lower().split()) == parent_text for child in validated.nodes):
+            raise ValueError("decomposition repeated the parent task")
+        if any(
+            marker in child.text.lower()
+            for child in validated.nodes
+            for marker in _GENERIC_TASK_MARKERS
+        ):
+            raise ValueError("decomposition produced generic placeholder task text")
+    except Exception as e:
         print(f"[WARN] INT4 decomposition or validation failed ({e}). Triggering Phase 2.5 INT8 fallback.")
-        call_int8_engine(original_full_prompt)
         result.resolved_via = "int8_fallback"
+        result.failure_reason = str(e)
+        try:
+            result.generation = generate_int8(
+                original_full_prompt,
+                request_id=f"{pipeline_id}:fallback:{node.node_id}",
+                system_prompt=FALLBACK_SYSTEM_PROMPT,
+                max_tokens=FALLBACK_MAX_TOKENS,
+                purpose="fallback",
+            )
+            result.response = result.generation.response
+        except Exception as fallback_error:
+            result.failure_reason = f"{e}; INT8 fallback failed: {fallback_error}"
         return result
 
     node_by_id = {n.node_id: n for n in validated.nodes}
+    prefix = f"{node.node_id}_"
+    incoming: dict[str, list[str]] = {child_id: [] for child_id in node_by_id}
+    for edge in validated.edges:
+        incoming[edge.to].append(f"{prefix}{edge.from_}")
     for child_id in validated.topo_order:
         child_node = node_by_id[child_id]
-        child_result = decompose(child_node, depth + 1, original_full_prompt)
+        child_classification = classify(
+            child_node.text,
+            prompt_id=f"{pipeline_id}:{node.node_id}:{child_node.node_id}",
+        )
+        # Content artifacts are useful leaf outputs, not planning containers.
+        # Small planners otherwise tend to split a short story into redundant
+        # introduction/body/conclusion nodes and lose the requested artifact.
+        atomic = child_node.atomic or bool(_ATOMIC_ARTIFACT_TASK.search(child_node.text))
+        child_node = child_node.model_copy(
+            update={
+                "node_id": f"{node.node_id}_{child_node.node_id}",
+                "intent_type": child_classification.aggregate_label,
+                "token_length": sum(
+                    clause.token_count for clause in child_classification.clauses
+                ),
+                "atomic": atomic,
+            }
+        )
+        child_result = decompose(
+            child_node,
+            depth + 1,
+            original_full_prompt,
+            pipeline_id=pipeline_id,
+            inherited_dependencies=list(
+                dict.fromkeys([*result.dependencies, *incoming[child_id]])
+            ),
+        )
         result.children.append(child_result)
 
     result.resolved_via = "decomposed"
@@ -201,4 +369,3 @@ def print_tree(node: DecompNode, indent: int = 0):
     print(f"{pad}- [{node.resolved_via}] ({node.intent_type}, {node.token_length}tok) {node.text[:60]}")
     for child in node.children:
         print_tree(child, indent + 1)
-

@@ -10,8 +10,6 @@ streamlit
 sentence-transformers>=2.7,<4
 torch>=2.1
 
---extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
-
 # ---------------------------------------------------------
 # Development / Evaluation
 # ---------------------------------------------------------
