@@ -33,9 +33,9 @@ pipeline.py   Classify → decompose → execute → synthesize orchestration
 benchmark.py  Direct-INT8 vs middleware execution, run telemetry, CSV history
 setup_windows.bat One-time native Windows/RTX 5050 dependency and model setup
 start_rouge.bat   Checked Windows launcher: API readiness wait + UI
-pyproject.toml    Single source of truth for dependencies (uv.lock locks it)
+pyproject.toml    Linux/uv project dependencies (uv.lock locks them)
 requirements-windows.txt / requirements-linux.txt
-              Platform-specific alternatives for pip-based installation
+              Platform-specific pip dependency entry points
 ```
 
 ## Component contracts
@@ -53,7 +53,8 @@ requirements-windows.txt / requirements-linux.txt
 - NVIDIA GPU with enough VRAM to hold the Q4 and Q8 models simultaneously;
   the target system is an 8 GB RTX 5050.
 - Current NVIDIA driver with working `nvidia-smi` and NVML access.
-- Python 3.13 and [uv](https://docs.astral.sh/uv/).
+- Python 3.13 x64. Windows uses its bundled `venv` and `pip`; Linux uses
+  [uv](https://docs.astral.sh/uv/).
 - Approximately 3 GB of storage for the two GGUF model files, in addition to
   the Python environment and model caches.
 - Network access during initial dependency and model installation.
@@ -79,10 +80,11 @@ setup_windows.bat
 
 `setup_windows.bat` performs the following operations:
 
-1. Confirms that `uv`, `nvidia-smi`, and an NVIDIA GPU are available.
-2. Creates `.venv` and installs the locked project dependencies without the
-   Linux CUDA wheel.
-3. Installs `llama-cpp-python 0.3.35` from the CUDA 13.0 wheel index.
+1. Confirms that Python 3.13 x64, `nvidia-smi`, and an NVIDIA GPU are available.
+2. Creates `.venv` with `python -m venv` and upgrades pip tooling.
+3. Removes any stale CPU or CUDA build of `llama-cpp-python`, then installs
+   `requirements-windows.txt`, including `llama-cpp-python 0.3.35` from the
+   CUDA 13.0 wheel index.
 4. Runs `Setup\windows_preflight.py` to verify Windows x64, NVML, driver
    version, CUDA support, GPU name, and visible VRAM.
 5. Downloads the Q4 and Q8 GGUF files into `Setup\models` when they are absent.
@@ -126,6 +128,8 @@ model initialization reports a CUDA allocation or compute-buffer failure.
 | Error | Action |
 |---|---|
 | `nvidia-smi was not found` | Install or repair the NVIDIA driver, then reopen Command Prompt. |
+| Python 3.13 x64 was not found | Install 64-bit Python 3.13 and enable either the `py` launcher or the PATH option. |
+| `.venv` is not a usable Windows environment | Remove or rename `.venv`, then run `setup_windows.bat` again. |
 | Driver is older than R580 | Install a current Game Ready or Studio driver. |
 | `llama-cpp-python is not CUDA-enabled` | Run `setup_windows.bat` again; do not replace its CUDA wheel with the PyPI CPU build. |
 | CUDA or DLL import failure | Install the Visual C++ 2015–2022 Redistributable and rerun setup. |
@@ -133,6 +137,17 @@ model initialization reports a CUDA allocation or compute-buffer failure.
 | API readiness timeout | Read the separate **RouGE API Server** window; it retains the startup traceback. |
 | Model file missing | Run `setup_windows.bat` to download the missing GGUF file. |
 | Another API is already running | Use the existing server or close it before starting another instance. |
+
+To recreate only the Windows Python environment from Command Prompt:
+
+```bat
+cd C:\path\to\RouGE
+rmdir /s /q .venv
+setup_windows.bat
+```
+
+This removal is optional and should only be used when `.venv` is broken or was
+copied from Linux. Model files under `Setup\models` are not affected.
 
 ### Linux with NVIDIA GPU
 

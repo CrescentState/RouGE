@@ -8,9 +8,24 @@ echo ===================================================
 echo Setting up RouGE for Windows / NVIDIA RTX 5050
 echo ===================================================
 
-where uv >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] uv was not found on PATH. Install uv, reopen Command Prompt, and retry.
+set "ROUGE_BOOTSTRAP_PYTHON="
+where py >nul 2>&1
+if not errorlevel 1 (
+    py -3.13 -c "import sys; raise SystemExit(0 if sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+    if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=py -3.13"
+)
+
+if not defined ROUGE_BOOTSTRAP_PYTHON (
+    where python >nul 2>&1
+    if not errorlevel 1 (
+        python -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 13) and sys.maxsize ^> 2**32 else 1)" >nul 2>&1
+        if not errorlevel 1 set "ROUGE_BOOTSTRAP_PYTHON=python"
+    )
+)
+
+if not defined ROUGE_BOOTSTRAP_PYTHON (
+    echo [ERROR] Python 3.13 x64 was not found.
+    echo Install Python 3.13 x64, enable the Python launcher or PATH option, and retry.
     exit /b 1
 )
 
@@ -28,23 +43,37 @@ if errorlevel 1 (
 )
 
 echo.
-echo Installing locked dependencies except the Linux CUDA wheel...
-uv sync --no-install-package llama-cpp-python
-if errorlevel 1 (
-    echo [ERROR] Dependency installation failed.
-    exit /b 1
-)
-
 set "ROUGE_PYTHON=%ROUGE_ROOT%.venv\Scripts\python.exe"
 if not exist "%ROUGE_PYTHON%" (
-    echo [ERROR] uv did not create the expected virtual environment.
+    if exist "%ROUGE_ROOT%.venv" (
+        echo [ERROR] .venv exists but is not a usable Windows virtual environment.
+        echo Remove or rename .venv, then run setup_windows.bat again.
+        exit /b 1
+    )
+    echo Creating the Python virtual environment...
+    %ROUGE_BOOTSTRAP_PYTHON% -m venv "%ROUGE_ROOT%.venv"
+    if errorlevel 1 (
+        echo [ERROR] Python could not create .venv.
+        exit /b 1
+    )
+)
+
+echo Upgrading pip and build support...
+"%ROUGE_PYTHON%" -m pip install --upgrade pip setuptools wheel
+if errorlevel 1 (
+    echo [ERROR] pip bootstrap failed.
     exit /b 1
 )
 
-echo Installing the CUDA 13.0 llama.cpp wheel for Windows Blackwell...
-uv pip install --python "%ROUGE_PYTHON%" --reinstall "llama-cpp-python==0.3.35" --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu130
+rem Remove any CPU, CUDA 12, or stale same-version build before pip resolves
+rem the pinned CUDA 13 wheel from requirements-windows.txt.
+"%ROUGE_PYTHON%" -m pip uninstall --yes llama-cpp-python >nul 2>&1
+
+echo Installing Windows dependencies and the CUDA 13.0 Blackwell wheel...
+"%ROUGE_PYTHON%" -m pip install --upgrade -r "%ROUGE_ROOT%requirements-windows.txt"
 if errorlevel 1 (
-    echo [ERROR] The CUDA 13.0 llama.cpp wheel could not be installed.
+    echo [ERROR] Windows dependency installation failed.
+    echo Confirm network access and review the pip error above.
     exit /b 1
 )
 

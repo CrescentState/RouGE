@@ -10,8 +10,8 @@ Crucially, it also integrates NVIDIA's `nvidia-ml-py` (imported as `pynvml`) to 
 ## Hardware & System Requirements
 *   **Target Hardware:** NVIDIA RTX 5050 Laptop GPU (**8GB VRAM**)
 *   **Python Version:** Python 3.13
-*   **Windows RTX 5050:** current NVIDIA R580-or-newer driver and Microsoft Visual C++ Redistributable. The project selects the CUDA 13.0 `llama-cpp-python` wheel on Windows for native Blackwell support.
-*   **Linux:** the existing CUDA 12.4 `llama-cpp-python` wheel remains selected.
+*   **Windows RTX 5050:** Python 3.13 x64 with pip, a current NVIDIA R580-or-newer driver, and Microsoft Visual C++ Redistributable. `setup_windows.bat` creates `.venv` and installs the CUDA 13.0 `llama-cpp-python` wheel for native Blackwell support.
+*   **Linux:** Python 3.13 with uv; the existing CUDA 12.4 `llama-cpp-python` wheel remains selected.
 *   **Models:** Qwen 2.5 1.5B Instruct (GGUF format: INT4 & INT8)
 
 ---
@@ -19,17 +19,30 @@ Crucially, it also integrates NVIDIA's `nvidia-ml-py` (imported as `pynvml`) to 
 ## Installation & Setup
 
 ### 1. Install Dependencies
-From the root of the project, install all required packages into the virtual environment:
+
+On native Windows, use the pip-based setup from the project root:
+
+```bat
+setup_windows.bat
+```
+
+This creates `.venv` with Python's standard `venv` module and installs
+`requirements-windows.txt`. It does not require uv.
+
+On Linux, install the locked environment with uv:
+
 ```bash
 uv sync
 ```
+
 ### 2. Download the Models
 
-Before starting the server, download the local model files. Run the script **from the `Setup` directory** — both `download_models.py` and `api.py` use file paths relative to `Setup/`:
+The Windows setup downloads missing models automatically. On Linux, download
+them manually:
 
 ```bash
 cd Setup
-..\.venv\Scripts\python.exe download_models.py
+../.venv/bin/python download_models.py
 ```
 
 This downloads the **INT4** and **INT8 GGUF model weights** of Qwen 2.5 1.5B Instruct (~3 GB total) from Hugging Face into `Setup/models/`.
@@ -41,7 +54,8 @@ Start the FastAPI application using **Uvicorn** from inside `Setup/`. On boot it
 > **Prerequisite:** the server will not start without an accessible NVIDIA GPU,
 > a compatible CUDA-enabled `llama-cpp-python` installation, NVML access, and
 > both `.gguf` files under `Setup/models/`. Native Windows users should run
-> `setup_windows.bat`, then `start_rouge.bat`, from the repository root.
+> `setup_windows.bat`, then `start_rouge.bat`, from the repository root. The
+> Windows setup uses pip and does not require uv.
 
 The Windows launcher defaults to context 2048 and batch 256 on the 8 GB RTX
 5050. It performs driver/model checks and polls `/telemetry` until the API is
@@ -54,10 +68,11 @@ set ROUGE_BATCH_SIZE=512
 start_rouge.bat
 ```
 
-```bash
-cd Setup
-..\.venv\Scripts\python.exe -m uvicorn api:app --host 0.0.0.0 --port 8000
+```bat
+start_rouge.bat
 ```
+
+For the manual Linux server command, see **Running the API Server** below.
 
 Once the server is running, the API interactive documentation (**Swagger UI**) is available at:
 
