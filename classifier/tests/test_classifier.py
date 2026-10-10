@@ -54,3 +54,39 @@ def test_plain_and_inside_quotes_does_not_split():
     assert segment('Explain the phrase "write and extract the result" briefly.') == [
         'Explain the phrase "write and extract the result" briefly.'
     ]
+
+def test_and_before_point_splits_story_and_key_points():
+    assert segment(
+        "Generate a short story about a family and point out the key points of the story"
+    ) == [
+        "Generate a short story about a family",
+        "point out the key points of the story",
+    ]
+
+def test_story_plus_key_points_is_mixed_intent():
+    r = classify(
+        "Generate a short story about a family and point out the key points of the story"
+    )
+    assert [clause.task_type for clause in r.clauses] == [
+        "creative_writing",
+        "extraction",
+    ]
+    assert r.aggregate_label == "mixed_intent"
+
+def test_instruction_head_beats_pasted_attachment():
+    r = classify(
+        "Extract all dates from this text: kickoff 2026-03-01, review March 15 2026."
+    )
+    assert r.clauses[0].task_type == "extraction"
+    assert r.aggregate_label == "simple"
+
+def test_summarize_head_with_article_body():
+    r = classify(
+        "Summarize this article in five bullet points: The council met Tuesday."
+    )
+    assert r.clauses[0].task_type == "summarization"
+
+def test_url_colon_does_not_split_instruction():
+    assert segment("visit http://example.com for details") == [
+        "visit http://example.com for details"
+    ]

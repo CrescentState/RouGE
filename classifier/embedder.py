@@ -24,9 +24,18 @@ def _get_model():
         _MODEL_ATTEMPTED = True
         try:
             from sentence_transformers import SentenceTransformer
-            _MODEL = SentenceTransformer(_MINILM_NAME)
-        except (ImportError, OSError):
+        except ImportError:
             _MODEL = None
+            return _MODEL
+        try:
+            # Prefer the local cache without touching the network: instant
+            # when cached, and no minutes-long retry storm when offline.
+            _MODEL = SentenceTransformer(_MINILM_NAME, local_files_only=True)
+        except Exception:
+            try:
+                _MODEL = SentenceTransformer(_MINILM_NAME)
+            except Exception:
+                _MODEL = None
     return _MODEL
 
 
@@ -45,6 +54,17 @@ def embed(text: str) -> list[float]:
         v = model.encode(text, normalize_embeddings=True)
         return [float(x) for x in v]
     return _hash_embed(text)
+
+
+def embed_many(texts: list[str]) -> list[list[float]]:
+    """Embed a batch at once. A single model.encode(list) call replaces N
+    per-text calls, which is what makes first-use classification slow
+    (the 140-anchor prototype bank would otherwise cost 140 round trips)."""
+    model = _get_model()
+    if model is not None:
+        vecs = model.encode(list(texts), normalize_embeddings=True)
+        return [[float(x) for x in v] for v in vecs]
+    return [_hash_embed(text) for text in texts]
 
 def _hash_embed(text: str) -> list[float]:
     v = [0.0] * DIM

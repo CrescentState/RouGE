@@ -14,6 +14,22 @@ from Setup.generation import CONTEXT_SIZE
 st.set_page_config(page_title="RouGE Unified Pipeline", layout="wide")
 
 
+@st.cache_resource(show_spinner=False)
+def _warm_classification_backend() -> str:
+    """Load the MiniLM embedding model once per Streamlit process.
+
+    The first classify() call otherwise pays ~8s of model load inside a
+    measured middleware run. Warming at startup keeps that cost out of
+    benchmark timings.
+    """
+    from classifier import get_backend
+
+    return get_backend()
+
+
+_warm_backend = _warm_classification_backend()
+
+
 def _mermaid_id(node_id: str) -> str:
     """Return an identifier accepted by Mermaid."""
     return "node_" + re.sub(r"[^a-zA-Z0-9_]", "_", node_id)
@@ -114,12 +130,20 @@ def render_latest_comparison(outcome: BenchmarkOutcome) -> None:
         delta = None if normal in {None, 0} or middleware is None else (
             (middleware - normal) / normal * 100.0
         )
+        if delta is None:
+            delta_cell = "—"
+        elif field == "duration_seconds" and max(normal, middleware) < 1.0:
+            delta_cell = f"{middleware - normal:+.2f} {unit} (noise)"
+        elif field == "energy_joules" and max(normal, middleware) < 10.0:
+            delta_cell = f"{middleware - normal:+.2f} {unit} (noise)"
+        else:
+            delta_cell = f"{delta:+.1f}%"
         rows.append(
             {
                 "Metric": label,
                 "Normal": "—" if normal is None else f"{normal:.2f} {unit}",
                 "Middleware": "—" if middleware is None else f"{middleware:.2f} {unit}",
-                "Middleware vs Normal": "—" if delta is None else f"{delta:+.1f}%",
+                "Middleware vs Normal": delta_cell,
             }
         )
     st.dataframe(rows, use_container_width=True, hide_index=True)
@@ -173,6 +197,7 @@ def render_middleware_details(outcome: BenchmarkOutcome) -> None:
         with tab:
             st.caption(
                 f"Node: {task.node_id} · Resolved via: {task.resolved_via} · "
+                f"Engine: {task.engine} · "
                 f"Tokens: {task.input_tokens} in / {task.generated_tokens} out"
             )
             st.markdown("**Instruction**")

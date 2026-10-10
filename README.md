@@ -14,9 +14,8 @@ For every prompt, RouGE:
 Failures degrade gracefully: if the INT4 decomposition fails validation (malformed graph, cyclic edges, bad intent tags), the node is routed to the INT8 engine instead ("Phase 2.5 fallback").
 
 > **Implementation status — read this before trusting section 4:**
-> - Leaf execution remains sequential and uses the INT8 engine.
-> - The real classifier is integrated into the pipeline and its labels are shared with the DAG layer.
-> - Multiple leaf results are synthesized by INT8; oversized synthesis inputs are reduced in bounded batches before the final call.
+> - Independent leaves run in parallel dependency batches (simple→INT4, complex→INT8).
+> - The real classifier is integrated into the pipeline and its labels are shared with the DAG layer.> - Multiple leaf results are synthesized by INT8; oversized synthesis inputs are reduced in bounded batches before the final call.
 
 ## Repository layout
 
@@ -258,6 +257,8 @@ Middleware** to populate the answer and telemetry comparison.
 | Classifier best–second margin | 0.08 (0.01 hash-fallback) | `classifier/contracts.py` |
 | Length escalation threshold | 4000 tokens | `classifier/entropy.py` |
 | Max decomposition depth | 4 | `DAG/decompose.py` |
+| Max planning attempts per run | 4 | `DAG/decompose.py` |
+| Planning circuit breaker | 2 consecutive failures | `DAG/decompose.py` |
 | Max nodes per decomposition | 4 | `DAG/dag_models.py` |
 | Decomposition VRAM cost estimate | 350 MB / node | `DAG/decompose.py` |
 | VRAM safety margin | 512 MB | `DAG/decompose.py` |
@@ -291,7 +292,7 @@ unrelated GPU workloads and repeat each mode before drawing conclusions.
 ## Known limitations
 
 - Leaf execution is sequential; parallel scheduling is not implemented.
-- `api.py` endpoints are `async` but call blocking llama.cpp methods — requests serialize and block the event loop.
+- `api.py` offloads blocking llama.cpp calls to worker threads behind a per-engine lock: cross-engine requests overlap, same-engine requests serialize on the shared context.
 - If `/telemetry` is unreachable, `decompose()` optimistically assumes 2048 MB free.
 - The current server still requires both Q4 and Q8 models plus a working NVIDIA/CUDA environment.
 

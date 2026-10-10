@@ -14,11 +14,14 @@ _CONNECTORS = re.compile(
 
 # Plain "and" is only a task boundary when it introduces another explicit
 # imperative. This handles "write a story and extract its lessons" without
-# breaking noun phrases such as "research and development".
+# breaking noun phrases such as "research and development". The verb list
+# covers task phrasings seen in real prompts ("point out the key points",
+# "rank the candidates", ...) that otherwise never split into clauses.
 _PLAIN_AND_TASK = re.compile(
-    r"\s+and\s+(?=(?:analyze|build|compose|create|describe|draft|explain|extract|"
-    r"find|fix|generate|give|identify|implement|list|provide|return|show|suggest|"
-    r"summarize|tell|write)\b)",
+    r"\s+and\s+(?=(?:analyze|build|choose|compare|compose|continue|create|describe|"
+    r"draft|explain|extract|find|fix|generate|give|identify|implement|list|outline|"
+    r"pick|plan|point|prepare|provide|rank|recommend|return|rewrite|select|show|"
+    r"suggest|summarize|tell|translate|write)\b)",
     re.IGNORECASE,
 )
 

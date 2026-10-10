@@ -38,8 +38,13 @@ class ApiInstanceLock:
 
                 fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except (BlockingIOError, OSError) as exc:
-            stream.seek(0)
-            owner = stream.read().strip() or "unknown"
+            try:
+                stream.seek(0)
+                owner = stream.read().strip() or "unknown"
+            except OSError:
+                # The held byte-range lock also blocks reading the PID back
+                # on Windows; report the conflict without the owner PID.
+                owner = "unknown (lock file unreadable while held)"
             stream.close()
             raise ApiAlreadyRunningError(
                 "Another RouGE API process is already loading or hosting the models "

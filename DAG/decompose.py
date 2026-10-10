@@ -128,7 +128,9 @@ def call_int4_engine(node_text: str, node_id: str, request_id: Optional[str] = N
         "prompt": node_text,
         "engine": "INT4",
         "system_prompt": INT4_DAG_SYSTEM_PROMPT,
-        "max_tokens": 512,
+        # Valid DAGs are short JSON; a tight cap halves the cost of the
+        # planning calls that fail validation anyway.
+        "max_tokens": 256,
     }
 
     resp = requests.post(f"{API_URL}/generate", json=payload, timeout=60)
@@ -165,23 +167,29 @@ class TokenCountResult:
     fits: bool
 
 
-def generate_int8(
+def generate(
     prompt: str,
     *,
+    engine: str = "INT8",
     request_id: str = "fallback_int8",
     system_prompt: str = "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
     max_tokens: int = 512,
     purpose: str = "execution",
     baseline_mode: Optional[str] = None,
 ) -> GenerationResult:
+    """Execute one prompt on the requested engine (Contract 3 /generate).
+
+    Routing policy lives in pipeline.py: simple work goes to INT4 (cheaper,
+    faster), complex work and all synthesis stay on INT8. Both engines serve
+    the same Qwen 2.5 1.5B tokenizer, so token budgets are interchangeable.
     """
-    Phase 2.5 Fallback: sends the full original prompt directly to the INT8 engine.
-    """
+    if engine not in ("INT4", "INT8"):
+        raise ValueError("engine must be INT4 or INT8")
     payload = {
         "request_id": request_id,
         "baseline_mode": baseline_mode or f"VRAM-gated:{purpose}",
         "prompt": prompt,
-        "engine": "INT8",
+        "engine": engine,
         "system_prompt": system_prompt,
         "max_tokens": max_tokens,
     }
@@ -194,6 +202,50 @@ def generate_int8(
         generated_tokens=int(data.get("generated_tokens", 0)),
         max_tokens_used=int(data.get("max_tokens_used", max_tokens)),
         context_size=int(data.get("context_size", CONTEXT_SIZE)),
+    )
+
+
+def generate_int8(
+    prompt: str,
+    *,
+    request_id: str = "fallback_int8",
+    system_prompt: str = "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
+    max_tokens: int = 512,
+    purpose: str = "execution",
+    baseline_mode: Optional[str] = None,
+) -> GenerationResult:
+    """
+    Phase 2.5 Fallback: sends the full original prompt directly to the INT8 engine.
+    """
+    return generate(
+        prompt,
+        engine="INT8",
+        request_id=request_id,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        purpose=purpose,
+        baseline_mode=baseline_mode,
+    )
+
+
+def generate_int4(
+    prompt: str,
+    *,
+    request_id: str = "simple_int4",
+    system_prompt: str = "You are a helpful AI assistant. Answer concisely and solve the prompt fully.",
+    max_tokens: int = 512,
+    purpose: str = "execution",
+    baseline_mode: Optional[str] = None,
+) -> GenerationResult:
+    """Execute simple (low-entropy) work on the cheaper INT4 engine."""
+    return generate(
+        prompt,
+        engine="INT4",
+        request_id=request_id,
+        system_prompt=system_prompt,
+        max_tokens=max_tokens,
+        purpose=purpose,
+        baseline_mode=baseline_mode,
     )
 
 
@@ -252,10 +304,34 @@ class DecompNode:
     response: Optional[str] = None
     generation: Optional[GenerationResult] = None
     failure_reason: Optional[str] = None
+    # Clause-level task type from re-classification ("summarization" |
+    # "extraction" | "code_generation" | "creative_writing" | "unknown" |
+    # "mixed"). Drives engine routing: creative leaves need INT8 quality.
+    task_type: str = "unknown"
 
 
 MAX_RECURSION_DEPTH = 4
 EST_VRAM_COST_PER_DECOMPOSE_MB = 350
+# Total INT4 planning calls allowed per pipeline run. Advisory prompts make
+# the small planner repeat the parent task at every level; without a global
+# budget, recursion burns dozens of planning calls before the leaf limit
+# rescues the run (measured: 12 fallback leaves, ~50s of planning).
+MAX_PLANNING_ATTEMPTS = 4
+# Consecutive planning failures (malformed graph, repeated parent, generic
+# placeholders) before the circuit breaker routes nodes straight to leaves
+# instead of burning an INT8 fallback call per node.
+MAX_CONSECUTIVE_PLANNING_FAILURES = 2
+
+
+def new_attempt_tracker(limit: int = MAX_PLANNING_ATTEMPTS) -> dict:
+    """Mutable per-run planning budget shared across decompose() recursion."""
+    return {
+        "used": 0,
+        "limit": limit,
+        "fail_streak": 0,
+        "capped": [],
+        "breaker": [],
+    }
 
 
 def needs_further_decomposition(node: DagNode) -> bool:
@@ -268,6 +344,8 @@ def decompose(
     original_full_prompt: str,
     pipeline_id: str = "adhoc",
     inherited_dependencies: Optional[List[str]] = None,
+    task_type: str = "unknown",
+    attempt_tracker: dict | None = None,
 ) -> DecompNode:
     result = DecompNode(
         node_id=node.node_id,
@@ -277,7 +355,9 @@ def decompose(
         depth=depth,
         atomic=node.atomic,
         dependencies=list(inherited_dependencies or []),
+        task_type=task_type,
     )
+    tracker = attempt_tracker if attempt_tracker is not None else new_attempt_tracker()
 
     if depth >= MAX_RECURSION_DEPTH:
         result.resolved_via = "leaf"
@@ -290,6 +370,12 @@ def decompose(
     if not has_vram_headroom(EST_VRAM_COST_PER_DECOMPOSE_MB):
         result.resolved_via = "leaf"
         return result
+
+    if tracker["used"] >= tracker["limit"]:
+        tracker["capped"].append(node.node_id)
+        result.resolved_via = "leaf"
+        return result
+    tracker["used"] += 1
 
     try:
         raw_response = call_int4_engine(
@@ -307,7 +393,20 @@ def decompose(
             for marker in _GENERIC_TASK_MARKERS
         ):
             raise ValueError("decomposition produced generic placeholder task text")
+        tracker["fail_streak"] = 0
     except Exception as e:
+        tracker["fail_streak"] += 1
+        if tracker["fail_streak"] >= MAX_CONSECUTIVE_PLANNING_FAILURES:
+            # Circuit breaker: the planner is stuck (e.g. repeating the
+            # parent task every level). Answer this node as a plain leaf
+            # instead of burning another full INT8 fallback call.
+            tracker["breaker"].append(node.node_id)
+            result.resolved_via = "leaf"
+            result.failure_reason = (
+                f"planning circuit breaker after {tracker['fail_streak']} "
+                f"consecutive failures: {e}"
+            )
+            return result
         print(f"[WARN] INT4 decomposition or validation failed ({e}). Triggering Phase 2.5 INT8 fallback.")
         result.resolved_via = "int8_fallback"
         result.failure_reason = str(e)
@@ -335,6 +434,11 @@ def decompose(
             child_node.text,
             prompt_id=f"{pipeline_id}:{node.node_id}:{child_node.node_id}",
         )
+        # Dominant clause task type for engine routing downstream. Mixed
+        # multi-clause children route to INT8 (safe default).
+        clause_types = [
+            clause.task_type for clause in child_classification.clauses
+        ] or ["unknown"]
         # Content artifacts are useful leaf outputs, not planning containers.
         # Small planners otherwise tend to split a short story into redundant
         # introduction/body/conclusion nodes and lose the requested artifact.
@@ -357,6 +461,12 @@ def decompose(
             inherited_dependencies=list(
                 dict.fromkeys([*result.dependencies, *incoming[child_id]])
             ),
+            task_type=(
+                clause_types[0]
+                if len(set(clause_types)) == 1
+                else "mixed"
+            ),
+            attempt_tracker=tracker,
         )
         result.children.append(child_result)
 

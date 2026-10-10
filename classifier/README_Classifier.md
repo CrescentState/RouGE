@@ -20,7 +20,7 @@ prompt ──▶ segment.py ──▶ embedder.py ──▶ aggregate.py ──�
 
 ## Bank and evaluation data
 
-The prototype bank contains 35 diverse anchors for each supported learned task type: summarization, extraction, code generation, and creative writing. `unknown` is intentionally not a prototype category; it is produced when confidence or margin falls below the configured thresholds.
+The prototype bank contains 49 diverse anchors for each supported learned task type: summarization, extraction, code generation, and creative writing. `unknown` is intentionally not a prototype category; it is produced when confidence or margin falls below the configured thresholds.
 
 `data/evaluation.jsonl` contains held-out fixtures covering all four learned task types, mixed intent, unknown prompts, and segmentation edge cases. Each record includes the expected clause task types and aggregate label. See `data/README.md` for the schema. Asset tests ensure the bank remains balanced, fixture IDs remain unique, segmentation expectations are valid, and evaluation prompts do not leak into the prototype bank.
 

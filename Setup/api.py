@@ -1,6 +1,7 @@
 import asyncio
 import csv
 import os
+import threading
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -108,6 +109,12 @@ int8_engine = load_engine(
     "INT8", str(MODEL_DIR / "qwen2.5-1.5b-instruct-q8_0.gguf")
 )
 
+# One lock per engine. A llama.cpp context is not safe for concurrent use,
+# so same-engine requests serialize here; INT4 and INT8 requests can still
+# overlap with each other. Blocking calls run in worker threads (asyncio
+# .to_thread) so the event loop never stalls behind inference.
+_ENGINE_LOCKS = {"INT4": threading.Lock(), "INT8": threading.Lock()}
+
 # 6. Dynamic Evaluation Payload
 class PromptRequest(BaseModel):
     request_id: str
@@ -137,7 +144,13 @@ def select_engine(engine: str):
 async def token_count(req: TokenCountRequest):
     model = select_engine(req.engine)
     formatted_prompt = format_qwen_prompt(req.prompt, req.system_prompt)
-    input_tokens = count_formatted_tokens(model, formatted_prompt)
+    lock = _ENGINE_LOCKS[req.engine]
+
+    def _run_count() -> int:
+        with lock:
+            return count_formatted_tokens(model, formatted_prompt)
+
+    input_tokens = await asyncio.to_thread(_run_count)
     context_size = model.n_ctx()
     available = max(0, context_size - input_tokens - req.safety_margin_tokens)
     return {
@@ -174,11 +187,17 @@ async def generate(req: PromptRequest):
             },
         ) from exc
 
-    response = model.create_completion(
-        prompt=formatted_prompt,
-        max_tokens=budget.effective_max_tokens,
-        stop=QWEN_STOP_SEQUENCES,
-    )
+    lock = _ENGINE_LOCKS[req.engine]
+
+    def _run_completion():
+        with lock:
+            return model.create_completion(
+                prompt=formatted_prompt,
+                max_tokens=budget.effective_max_tokens,
+                stop=QWEN_STOP_SEQUENCES,
+            )
+
+    response = await asyncio.to_thread(_run_completion)
     latency = round(time.time() - start_time, 4)
     
     with open(REQUEST_LOG, mode="a", newline="") as f:

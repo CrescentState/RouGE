@@ -24,7 +24,7 @@ def test_prototype_bank_is_balanced_and_has_no_duplicates():
         "code_generation",
         "creative_writing",
     }
-    assert {len(examples) for examples in bank.values()} == {35}
+    assert {len(examples) for examples in bank.values()} == {49}
     for examples in bank.values():
         normalized = [example.strip().lower() for example in examples]
         assert len(normalized) == len(set(normalized))

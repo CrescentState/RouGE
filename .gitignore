@@ -1,6 +1,9 @@
 .venv/
+venv/
 __pycache__/
 *.pyc
 Setup/models/
 *.csv
 .pytest_cache/
+.battery/
+*.log

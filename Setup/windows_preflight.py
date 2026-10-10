@@ -6,6 +6,13 @@ import os
 import platform
 import sys
 
+# Force Python to see the CUDA DLLs using both modern and legacy Windows methods
+cuda_bin = r"C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v12.4\bin"
+if os.path.exists(cuda_bin):
+    os.add_dll_directory(cuda_bin)
+    # Inject it directly into the environment PATH for this session
+    os.environ["PATH"] = cuda_bin + os.pathsep + os.environ.get("PATH", "")
+
 
 def fail(message: str) -> None:
     print(f"[ERROR] {message}")
